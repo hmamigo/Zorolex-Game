@@ -3,28 +3,8 @@ extends Node2D
 
 const P = preload("res://scripts/palette.gd")
 const ART = preload("res://scripts/pixel_art.gd")
-
-const SPAWN := Vector2(-560.0, 0.0)
-const CAM_LEFT := -900.0
-const CAM_RIGHT := 1120.0
-const CAM_TOP := -230.0
-const CAM_BOTTOM := 20.0
-
-const GROUNDS := [
-	Rect2(-820.0, 0.0, 570.0, 150.0),
-	Rect2(-170.0, 0.0, 500.0, 150.0),
-	Rect2(420.0, 0.0, 560.0, 150.0),
-]
-
-const LEDGES := [
-	Rect2(-660.0, -90.0, 150.0, 18.0),
-	Rect2(-430.0, -176.0, 130.0, 18.0),
-	Rect2(-150.0, -96.0, 150.0, 18.0),
-	Rect2(60.0, -180.0, 130.0, 18.0),
-	Rect2(520.0, -96.0, 130.0, 18.0),
-	Rect2(720.0, -176.0, 120.0, 18.0),
-	Rect2(860.0, -250.0, 100.0, 18.0),
-]
+const LEVEL = preload("res://scripts/level_data.gd")
+const PLAYER_SCRIPT = preload("res://scripts/player.gd")
 
 var art: ART
 var player: CharacterBody2D
@@ -52,6 +32,7 @@ func _ready() -> void:
 	_build_camera()
 	_build_ui()
 	_update_parallax()
+	_validate_level()
 
 
 # =====================================================================
@@ -271,29 +252,180 @@ void fragment() {
 # =====================================================================
 func _build_world() -> void:
 	var seed := 0
-	for g in GROUNDS:
+	for g in LEVEL.GROUNDS:
 		_create_platform(g, false, seed)
 		_dress_ground(g, seed)
 		seed += 1
 
-	for l in LEDGES:
+	for l in LEVEL.LEDGES:
 		_create_platform(l, true, seed)
 		_dress_ledge(l, seed)
 		seed += 1
 
 	# sotobosque: arbustos y helechos al pie de cada tramo de suelo
 	seed = 0
-	for g in GROUNDS:
+	for g in LEVEL.GROUNDS:
 		_dress_understory(g, 71 + seed * 13)
 		seed += 1
-	# cartel junto al inicio
-	_place(art.sign(), Vector2(-650.0, 0.0), 2)
-	# tronco caido
-	_place(art.log(3), Vector2(250.0, 0.0), 2)
 
-	# niebla que respira en la boca de los barrancos
-	_add_gap_mist(-250.0, -170.0, 77)
-	_add_gap_mist(330.0, 420.0, 91)
+	for prop in LEVEL.PROPS:
+		_place_prop(prop)
+
+	# niebla que respira en la boca de cada barranco
+	var gaps := _ground_gaps()
+	for i in gaps.size():
+		_add_gap_mist(gaps[i].x, gaps[i].y, 77 + i * 14)
+
+
+func _place_prop(prop: Dictionary) -> void:
+	var pos: Vector2 = prop["pos"]
+	var z: int = prop.get("z", 2)
+	match prop["kind"]:
+		"sign":
+			_place(art.sign(), pos, z)
+		"log":
+			_place(art.log(prop.get("size", 3)), pos, z)
+		_:
+			push_warning("Prop desconocido en level_data.gd: %s" % prop["kind"])
+
+
+## Huecos entre tramos de suelo consecutivos, como Vector2(izquierda, derecha).
+func _ground_gaps() -> Array[Vector2]:
+	var sorted_grounds := LEVEL.GROUNDS.duplicate()
+	sorted_grounds.sort_custom(func(a: Rect2, b: Rect2) -> bool: return a.position.x < b.position.x)
+	var gaps: Array[Vector2] = []
+	for i in range(1, sorted_grounds.size()):
+		var left: Rect2 = sorted_grounds[i - 1]
+		var right: Rect2 = sorted_grounds[i]
+		if right.position.x > left.end.x:
+			gaps.append(Vector2(left.end.x, right.position.x))
+	return gaps
+
+
+# =====================================================================
+#  Validacion del nivel
+# =====================================================================
+## Avisa por consola de un nivel que no se puede jugar: plataformas
+## solapadas, hongos patrullando fuera de su suelo o repisas que no se
+## alcanzan con el salto. El alcance es conservador (calculado a la misma
+## altura), asi que un aviso de "no se alcanza" conviene mirarlo a mano.
+func _validate_level() -> void:
+	for problem in _level_problems():
+		push_warning("Nivel: " + problem)
+
+
+func _level_problems() -> Array[String]:
+	var problems: Array[String] = []
+	var boxes: Array[Rect2] = []
+	boxes.append_array(LEVEL.GROUNDS)
+	boxes.append_array(LEVEL.LEDGES)
+	var ground_count := LEVEL.GROUNDS.size()
+
+	for i in boxes.size():
+		for j in range(i + 1, boxes.size()):
+			if boxes[i].intersects(boxes[j]):
+				problems.append("%s se solapa con %s" % [_box_name(i, ground_count), _box_name(j, ground_count)])
+
+	var jump := _jump_envelope()
+	var grounds := _sorted_grounds()
+	for i in range(1, grounds.size()):
+		var gap := grounds[i].position.x - grounds[i - 1].end.x
+		if gap > jump.x:
+			problems.append("el barranco de %.0f px en x=%.0f supera el salto (%.0f px)" % [gap, grounds[i - 1].end.x, jump.x])
+
+	for enemy in LEVEL.ENEMIES:
+		var pos: Vector2 = enemy["pos"]
+		var ground_index := _ground_at(pos.x)
+		if ground_index < 0:
+			problems.append("el hongo en x=%.0f no esta sobre ningun tramo de suelo" % pos.x)
+			continue
+		var ground: Rect2 = LEVEL.GROUNDS[ground_index]
+		if enemy.has("patrol"):
+			var patrol: Vector2 = enemy["patrol"]
+			var left := patrol.x
+			var right := patrol.y
+			if left < ground.position.x or right > ground.end.x or left > right:
+				problems.append("el hongo en x=%.0f patrulla fuera de su suelo (%.0f..%.0f)" % [pos.x, ground.position.x, ground.end.x])
+
+	for i in _unreachable_boxes():
+		problems.append("%s no se alcanza desde ninguna plataforma" % _box_name(i, ground_count))
+
+	return problems
+
+
+## Alcance del salto como Vector2(horizontal a la misma altura, altura maxima).
+func _jump_envelope() -> Vector2:
+	var rise: float = PLAYER_SCRIPT.JUMP_VELOCITY * PLAYER_SCRIPT.JUMP_VELOCITY / (2.0 * PLAYER_SCRIPT.GRAVITY)
+	var t_up: float = -PLAYER_SCRIPT.JUMP_VELOCITY / PLAYER_SCRIPT.GRAVITY
+	var fall_gravity: float = PLAYER_SCRIPT.GRAVITY * PLAYER_SCRIPT.FALL_MULT
+	var t_down := sqrt(2.0 * rise / fall_gravity)
+	return Vector2(PLAYER_SCRIPT.SPEED * (t_up + t_down), rise)
+
+
+## Tramos de suelo ordenados de izquierda a derecha.
+func _sorted_grounds() -> Array[Rect2]:
+	var grounds: Array[Rect2] = []
+	grounds.append_array(LEVEL.GROUNDS)
+	grounds.sort_custom(func(a: Rect2, b: Rect2) -> bool: return a.position.x < b.position.x)
+	return grounds
+
+
+func _ground_at(x: float) -> int:
+	for i in LEVEL.GROUNDS.size():
+		var g: Rect2 = LEVEL.GROUNDS[i]
+		if x >= g.position.x and x <= g.end.x:
+			return i
+	return -1
+
+
+## Indices de repisas inalcanzables, propagando desde el suelo hacia arriba.
+func _unreachable_boxes() -> Array[int]:
+	var boxes: Array[Rect2] = []
+	boxes.append_array(LEVEL.GROUNDS)
+	boxes.append_array(LEVEL.LEDGES)
+	var ground_count := LEVEL.GROUNDS.size()
+	var jump := _jump_envelope()
+
+	var reachable: Array[bool] = []
+	reachable.resize(boxes.size())
+	for i in boxes.size():
+		reachable[i] = i < ground_count
+
+	var changed := true
+	while changed:
+		changed = false
+		for i in range(ground_count, boxes.size()):
+			if reachable[i]:
+				continue
+			for j in boxes.size():
+				if reachable[j] and _can_jump(boxes[j], boxes[i], jump):
+					reachable[i] = true
+					changed = true
+					break
+
+	var unreachable: Array[int] = []
+	for i in range(ground_count, boxes.size()):
+		if not reachable[i]:
+			unreachable.append(i)
+	return unreachable
+
+
+func _can_jump(from: Rect2, to: Rect2, jump: Vector2) -> bool:
+	var rise := from.position.y - to.position.y
+	if rise > jump.y:
+		return false
+	var gap := 0.0
+	if to.position.x > from.end.x:
+		gap = to.position.x - from.end.x
+	elif from.position.x > to.end.x:
+		gap = from.position.x - to.end.x
+	return gap <= jump.x
+
+
+func _box_name(index: int, ground_count: int) -> String:
+	if index < ground_count:
+		return "el suelo %d" % index
+	return "la repisa %d" % (index - ground_count)
 
 
 func _add_gap_mist(left: float, right: float, seed: int) -> void:
@@ -493,17 +625,28 @@ func _build_ambient() -> void:
 func _build_player() -> void:
 	var p := CharacterBody2D.new()
 	p.name = "Zorro"
-	p.set_script(load("res://scripts/player.gd"))
-	p.position = SPAWN
+	p.set_script(PLAYER_SCRIPT)
+	p.position = LEVEL.SPAWN
 	p.z_index = 5
 	add_child(p)
-	p.set("respawn_position", SPAWN)
+	p.set("respawn_position", LEVEL.SPAWN)
 	player = p
 
 
 func _build_enemies() -> void:
-	_spawn_enemy(Vector2(70.0, 0.0), -130.0, 310.0)
-	_spawn_enemy(Vector2(610.0, 0.0), 450.0, 935.0)
+	for enemy in LEVEL.ENEMIES:
+		var pos: Vector2 = enemy["pos"]
+		var patrol: Vector2 = enemy.get("patrol", _patrol_for(pos))
+		_spawn_enemy(pos, patrol.x, patrol.y)
+
+
+## Patrulla por defecto: el tramo de suelo que contiene la posicion, con margen.
+func _patrol_for(pos: Vector2) -> Vector2:
+	var ground_index := _ground_at(pos.x)
+	if ground_index < 0:
+		return Vector2(pos.x - 120.0, pos.x + 120.0)
+	var g: Rect2 = LEVEL.GROUNDS[ground_index]
+	return Vector2(g.position.x + LEVEL.PATROL_MARGIN, g.end.x - LEVEL.PATROL_MARGIN)
 
 
 func _spawn_enemy(pos: Vector2, left: float, right: float) -> void:
@@ -540,8 +683,9 @@ func _process(delta: float) -> void:
 		player.global_position.y - 78.0
 	)
 	var half := get_viewport_rect().size * 0.5 / camera.zoom
-	target.x = clampf(target.x, CAM_LEFT + half.x, CAM_RIGHT - half.x)
-	target.y = clampf(target.y, CAM_TOP, CAM_BOTTOM)
+	var bounds: Rect2 = LEVEL.CAM_BOUNDS
+	target.x = clampf(target.x, bounds.position.x + half.x, bounds.end.x - half.x)
+	target.y = clampf(target.y, bounds.position.y, bounds.end.y)
 	camera.global_position = camera.global_position.lerp(target, 1.0 - exp(-7.5 * delta))
 
 	_shake = move_toward(_shake, 0.0, delta * 9.0)

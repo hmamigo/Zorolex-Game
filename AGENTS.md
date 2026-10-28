@@ -34,6 +34,7 @@ fuentes ni audio importados. Todo se genera en runtime.
 |---|---|
 | `scripts/palette.gd` | Única fuente de color + `LEGEND` de los mapas ASCII |
 | `scripts/sprite_data.gd` | Frames ASCII del zorro y del hongo |
+| `scripts/level_data.gd` | Nivel: spawn, límites de cámara, suelos, repisas, props y hongos |
 | `scripts/pixel_art.gd` | Genera texturas: sprites, terreno, bosque, sol, niebla |
 | `scripts/main.gd` | Mundo, parallax, cámara, ambiente, HUD y título |
 | `scripts/player.gd` | Movimiento, coyote time, squash & stretch, polvo, sombra |
