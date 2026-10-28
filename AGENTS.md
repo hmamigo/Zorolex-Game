@@ -80,4 +80,4 @@ Con varias sesiones registradas, fijá la correcta con `session_activate`.
 - Las capturas van a `out/` (ignorada por Godot vía `out/.gdignore` y por git).
   Regenerables: nunca las edites a mano.
 - `tools/*.py` necesitan **Pillow**.
-- Este directorio **todavía no es un repo git**.
+- El repo git ignora `.godot/`, `out/*` (salvo `out/.gdignore`) y `__pycache__/`.
