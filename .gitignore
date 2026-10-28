@@ -1,0 +1,11 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Capturas de iteracion: regenerables con tools/, nunca editar a mano
+out/*
+!out/.gdignore
+
+# Python de tools/
+__pycache__/
+*.pyc
