@@ -84,7 +84,7 @@ func _ready() -> void:
 	_dust.gravity = Vector2(0.0, 160.0)
 	_dust.scale_amount_min = 0.35
 	_dust.scale_amount_max = 0.9
-	_dust.color = Color(0.95, 0.9, 0.77, 0.85)
+	_dust.color = P.DUST
 	_dust.texture = _art.puff_texture()
 	_dust.position = Vector2(0.0, -2.0)
 	_dust.z_index = -1

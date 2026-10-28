@@ -65,6 +65,9 @@ const SHADOW := Color("2b3f44")
 const FIREFLY := Color("ffe6a3")
 const FLOWER_RUST := Color("c86a48")
 
+# --- particulas -------------------------------------------------------
+const DUST := Color("f2e6c4d9")
+
 # --- leyenda de sprites ----------------------------------------------
 const LEGEND := {
 	".": Color(0, 0, 0, 0),
