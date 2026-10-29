@@ -6,6 +6,9 @@ const ART = preload("res://scripts/pixel_art.gd")
 const LEVEL = preload("res://scripts/level_data.gd")
 const PLAYER_SCRIPT = preload("res://scripts/player.gd")
 
+## Suaviza las capas lejanas (bosque, copas, sol). false = pixeles duros como antes.
+const BG_SMOOTH := true
+
 var art: ART
 var player: CharacterBody2D
 var camera: Camera2D
@@ -94,18 +97,18 @@ func _build_parallax() -> void:
 		Color(1.0, 1.0, 1.0, 0.85))
 	# valle de fondo: rellena la parte baja cuando la camara sube
 	_tiled_layer(art.valley_forest(59), Vector2(0.07, 0.03), Vector2(0.0, -60.0), -80, 5, 2.0,
-		Color(0.94, 0.98, 0.94, 0.92))
+		Color(0.94, 0.98, 0.94, 1.0))
 	_tiled_layer(art.mid_forest(23), Vector2(0.19, 0.04), Vector2(0.0, -178.0), -84, 5, 2.0,
-		Color(1.0, 1.0, 1.0, 0.95))
+		Color(1.0, 1.0, 1.0, 1.0))
 	# haces de luz que caen entre las copas
 	_single_layer(art.light_shafts(151), Vector2(0.03, 0.02), Vector2(90.0, -150.0), -81, 2.0,
 		Color(1.0, 0.86, 0.58, 0.9), true)
-	_tiled_layer(art.near_forest(37), Vector2(0.33, 0.07), Vector2(0.0, -210.0), -64, 5, 2.0,
+	_tiled_layer(art.near_forest(37), Vector2(0.33, 1.0), Vector2(0.0, -283.0), -64, 5, 2.0,
 		Color(0.94, 0.98, 0.94, 1.0))
 
 	# copas que enmarcan la parte superior
 	_tiled_layer(art.canopy_layer(71), Vector2(0.55, 0.06), Vector2(0.0, -100.0), -58, 5, 2.0,
-		Color(1.0, 1.0, 1.0, 0.96))
+		Color(1.0, 1.0, 1.0, 1.0))
 
 	# barranco oscuro detras de los huecos del suelo
 	var pit := Sprite2D.new()
@@ -128,6 +131,8 @@ func _single_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, scale
 	s.scale = Vector2(scale, scale)
 	s.position = Vector2.ZERO
 	s.modulate = modulate
+	if BG_SMOOTH:
+		s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	if additive:
 		var m := CanvasItemMaterial.new()
 		m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -149,6 +154,8 @@ func _tiled_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, tiles:
 		s.scale = Vector2(scale, scale)
 		s.position = Vector2((float(i) - float(tiles) * 0.5) * tw, 0.0)
 		s.modulate = modulate
+		if BG_SMOOTH:
+			s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		node.add_child(s)
 	add_child(node)
 	_layers.append({"node": node, "factor": factor, "base": base})

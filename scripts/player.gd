@@ -192,7 +192,7 @@ func _update_animation(delta: float) -> void:
 			_sprite.play("run")
 		_sprite.speed_scale = clampf(absf(velocity.x) / SPEED, 0.7, 1.35)
 		_bob += delta * (11.0 + absf(velocity.x) * 0.035)
-		bob = -absf(sin(_bob)) * 1.7
+		bob = -absf(sin(_bob)) * 0.8
 	else:
 		if _sprite.animation != "idle":
 			_sprite.play("idle")
