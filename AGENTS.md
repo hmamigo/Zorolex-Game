@@ -43,7 +43,7 @@ diario.
 - Wikipedia es CC BY-SA 4.0: cada saber enlaza a su artículo y el juego muestra esa
   atribución en el diario y en `CREDITS.md`.
 
-### Formato de datos (propuesto)
+### Formato de datos
 
 Un archivo por saber en `data/saberes/<id>.json`. Los textos van por idioma dentro del
 mismo archivo; las fuentes no se traducen.
@@ -52,9 +52,14 @@ mismo archivo; las fuentes no se traducen.
 {
   "id": "ejemplo_id",
   "zona": "bosque_de_bruma",
+  "tema": "ciencias_naturales",
   "titulo": { "es": "…", "en": "…" },
   "texto":  { "es": "…", "en": "…" },
-  "dato":   { "valor": "…", "tipo": "numero|palabra|simbolo" },
+  "dato":   { "tipo": "numero|palabra|simbolo", "valor": { "es": "…", "en": "…" } },
+  "pregunta": {
+    "es": { "enunciado": "…", "opciones": ["…", "…", "…"] },
+    "en": { "enunciado": "…", "opciones": ["…", "…", "…"] }
+  },
   "desbloquea": ["puerta_ruinas_01"],
   "fuentes": [
     { "titulo": "…", "url": "https://…", "idioma": "es", "consultado": "AAAA-MM-DD" }
@@ -64,13 +69,22 @@ mismo archivo; las fuentes no se traducen.
 
 - `id` es estable, en minúsculas y con guiones bajos. Una vez publicado, no se renombra
   (el guardado y las puertas dependen de él).
+- `tema` es el de la zona (`TEMA` en el archivo de nivel, p. ej. `level_data.gd` o
+  `level_ruinas.gd`): todos sus saberes comparten el mismo. La etiqueta visible sale de
+  `i18n/ui.csv` (`TEMA_<ID>`), no del archivo.
+- `dato.valor` lleva un valor por idioma. La respuesta correcta de la pregunta **es**
+  ese valor (se compara sin mayúsculas ni espacios), así que no se duplica la verdad.
+  Las opciones van como valores pelados ("Esporas", no "Por esporas") para que
+  coincidan con el dato.
+- `desbloquea` lista las puertas a las que el saber contribuye. Una puerta que pide
+  varios saberes aparece en cada uno de ellos: se abre solo cuando están todos.
 - Todo saber debe tener todos los idiomas activos del juego. Si falta uno, que falle la
   validación (`tools/validate_saberes.gd`, ver "Verificar").
 
 ### Idiomas
 
 - Idiomas iniciales: `es` y `en`. Agregar otro es agregar la clave en cada saber y en
-  la tabla de la interfaz, sin tocar código.
+  `i18n/ui.csv`, sin tocar código.
 - Los textos de la interfaz (menús, HUD, diario) usan el sistema de traducción de Godot
   (`tr()` y `TranslationServer`). Los saberes los carga `scripts/saberes.gd` y eligen
   el idioma activo con fallback a `en`.
@@ -78,26 +92,38 @@ mismo archivo; las fuentes no se traducen.
 
 ### Desbloqueo y diario
 
-- Una puerta o mecanismo declara qué saber o dato necesita. Dos modos posibles:
-  **requiere tener el saber** o **pide el dato** (el jugador lo lee en el diario y lo
-  ingresa). Ver "Por decidir".
-- El diario lista los saberes encontrados, con su texto, su dato resaltado y sus
-  fuentes, y permite releerlos en cualquier momento.
-- El progreso (ids recogidos, puertas abiertas) se guarda en `user://savegame.json`.
+- Una puerta declara la **lista de saberes** que necesita (`requires`) y el saber del
+  que pregunta (`pregunta_de`, que debe estar en esa lista). Con todos reunidos, al
+  acercarse aparece un panel con una **pregunta de opción múltiple**; la puerta se abre
+  recién con la respuesta correcta. Mientras falte algún saber, avisa cuáles son.
+- La pregunta no castiga: si la respuesta no es, se puede abrir el diario (`J`) desde el
+  mismo panel, releer el saber y reintentar. La puerta abierta queda guardada.
+- El diario lista los saberes encontrados, con su tema, su texto, su dato resaltado y
+  sus fuentes, y permite releerlos en cualquier momento.
+- El progreso (ids recogidos, puertas abiertas, idioma) se guarda en
+  `user://savegame.json`, y se escribe al recoger un saber o abrir una puerta.
 
 ## Zonas y progresión
 
-- Estructura: un **hub** tranquilo (el claro del zorro) del que salen puertas a zonas.
-  Cada zona (bosque, ruinas, cueva, montaña) es un nivel propio con sus saberes.
+- **Estado actual:** Bosque de Bruma (nivel inicial, *ciencias naturales*, 4 saberes) y
+  Ruinas (*historia*, 2 saberes), conectadas por `puerta_ruinas_01`. La puerta
+  `puerta_cueva_01` de Ruinas ya está preparada para la Cueva.
+- **Planificado:** un **hub** tranquilo (el claro del zorro) del que salgan puertas a
+  cada zona; Cueva = química; Montaña = filosofía.
+- **Cada zona tiene una temática**, y todos sus saberes la comparten. El tema se muestra
+  en el diario.
 - Cada zona se define con datos, no con código especial: spawn, límites de cámara,
-  suelos, repisas, props, enemigos, saberes y puertas, siguiendo el patrón de
-  `scripts/level_data.gd`. Agregar una zona = agregar un archivo de datos y, si hace
-  falta, una paleta de ambiente.
-- Hacé primero una **rebanada vertical**: Bosque de Bruma con 4–6 saberes y una sola
-  puerta que dependa de uno. Recién cuando eso funcione, sumá zonas.
+  suelos, repisas, props, enemigos, saberes y puertas, en un archivo por zona
+  (`scripts/level_data.gd` para el bosque, `scripts/level_ruinas.gd` para Ruinas).
+- **Agregar una zona:** crear `scripts/level_<zona>.gd` con las mismas constantes
+  (`ZONE_ID`, `TEMA`, `SPAWN`, `CAM_BOUNDS`, `GROUNDS`, `LEDGES`, `PROPS`, `ENEMIES`,
+  `SABERES`, `DOORS`), escribir sus saberes en `data/saberes/`, enlazarla en `main.gd`
+  (`_nivel_destino` y el `preload`) y pasar el validador.
 - Las zonas se enlazan por saberes: el dato de una zona abre la siguiente. Evitá
   dependencias circulares y comprobá que toda puerta se pueda abrir con saberes
   alcanzables.
+- La rebanada vertical (bosque con 4 saberes y una puerta) ya está hecha; la Cueva es
+  el próximo paso.
 
 ## Verificar antes de dar algo por terminado
 
@@ -107,15 +133,25 @@ mismo archivo; las fuentes no se traducen.
    ```
    Buscar `SCRIPT ERROR` en la salida, no solo el código de salida. Vale en los dos
    modos: el editor no siempre reporta un parseo roto al abrir la escena.
-2. **Captura** lo que tocaste: la tabla de comandos está en el skill `arte-procedural`.
-   Con el editor conectado, `editor_screenshot` cubre lo mismo sin salir del editor.
+2. **Captura** lo que tocaste. Con el editor conectado, `editor_screenshot` cubre lo
+   mismo sin salir del editor. Sin editor:
+   ```sh
+   godot --path . --script tools/capture.gd --rendering-driver opengl3 --audio-driver Dummy
+   godot --path . --script tools/capture_saberes.gd --rendering-driver opengl3 --audio-driver Dummy
+   python3 tools/contact_sheet.py
+   ```
+   Cada script escribe su propio set en `out/`; la tabla completa de capturas está en
+   los encabezados de `tools/capture*.gd`.
 3. **Mirá la imagen.** No afirmes que algo "se ve bien" sin abrir el PNG
    (`out/contact_sheet.png` o el que devuelva `editor_screenshot`).
    Ojo: cada script escribe su propio set de capturas y no regenera el del otro.
-4. **Si tocaste saberes**, corré el validador (planificado):
-   `godot --headless --path . --script tools/validate_saberes.gd`. Debe comprobar: ids
-   únicos, todos los idiomas presentes, un solo párrafo, al menos una fuente con URL, y
-   que cada `desbloquea` apunte a una puerta existente.
+4. **Si tocaste saberes o puertas**, corré el validador:
+   `godot --headless --path . --script tools/validate_saberes.gd`. Comprueba ids
+   únicos y estables, todos los idiomas, un solo párrafo, tema de la zona, dato por
+   idioma y tipo, que la pregunta tenga enunciado y **una sola opción igual al dato**,
+   al menos una fuente con URL y fecha, y que cada `desbloquea`, `requires` y
+   `pregunta_de` apunte a algo existente en los archivos de nivel (`level_data.gd`,
+   `level_ruinas.gd`).
 
 ## Mapa del código
 
@@ -123,14 +159,24 @@ mismo archivo; las fuentes no se traducen.
 |---|---|
 | `scripts/palette.gd` | Única fuente de color + `LEGEND` de los mapas ASCII |
 | `scripts/sprite_data.gd` | Frames ASCII del zorro y del hongo |
-| `scripts/level_data.gd` | Nivel: spawn, límites de cámara, suelos, repisas, props y hongos |
-| `scripts/pixel_art.gd` | Genera texturas: sprites, terreno, bosque, sol, niebla |
-| `scripts/main.gd` | Mundo, parallax, cámara, ambiente, HUD y título |
+| `scripts/level_data.gd` | Nivel 1 (Bosque de Bruma): spawn, límites de cámara, suelos, repisas, props, hongos, saberes y puertas |
+| `scripts/level_ruinas.gd` | Nivel 2 (Ruinas): mismo formato que `level_data.gd` |
+| `scripts/pixel_art.gd` | Genera texturas: sprites, terreno, bosque, sol, niebla, hojas de saber y puertas |
+| `scripts/main.gd` | Mundo, parallax, cámara, ambiente, HUD, título, avisos y cambio de zona (`cargar_nivel`) |
 | `scripts/player.gd` | Movimiento, coyote time, squash & stretch, polvo, sombra |
 | `scripts/enemy.gd` | Patrulla del hongo, aplastamiento, esporas |
-| `scripts/saberes.gd` *(planificado)* | Autoload: carga `data/saberes/`, idioma activo, estado recogido/guardado |
-| `scripts/diario.gd` *(planificado)* | Interfaz del diario |
-| `tools/validate_saberes.gd` *(planificado)* | Validador de datos de saberes |
+| `scripts/saberes.gd` | Autoload: carga `data/saberes/`, idioma activo, progreso guardado |
+| `scripts/saber_pickup.gd` | Hoja de luz flotante que se recoge al tocarla |
+| `scripts/diario.gd` | Interfaz del diario: lista, tema, texto, dato, fuentes y atribución |
+| `scripts/pregunta.gd` | Panel de la pregunta de la puerta: opciones, reintento y pausa |
+| `scripts/puerta.gd` | Puerta de piedra: pide sus saberes y una pregunta para abrirse |
+| `i18n/ui.csv` | Textos de la interfaz en `es` y `en` (Godot los importa a `.translation`) |
+| `tools/validate_saberes.gd` | Validador de datos de saberes y de sus enlaces con los niveles |
+| `tools/capture*.gd` | Capturas de pantalla del juego en `out/` |
+
+Los nodos de cada zona cuelgan del nodo `Mundo`, no directamente de `main`. Por eso no
+pueden asumir que `get_parent()` es `main`: para llegar al juego (avisos, cámara,
+cambio de zona) suben por los padres con el helper `_juego()` (ver `puerta.gd`).
 
 Marcá como planificado todo lo que todavía no exista; no lo describas como si estuviera.
 
@@ -165,8 +211,8 @@ Con varias sesiones registradas, fijá la correcta con `session_activate`.
 
 ### Sin editor (headless)
 
-- Todo se prueba con scripts `SceneTree` vía `--script`, y la lista de comandos y
-  capturas está en el skill `arte-procedural`.
+- Todo se prueba con scripts `SceneTree` vía `--script`. Las capturas se generan con
+  los `tools/capture*.gd` y se arman con `python3 tools/contact_sheet.py`.
 - Los scripts `SceneTree` deben declarar `func _process(_delta: float) -> bool` y
   devolver `true` para terminar.
 
@@ -191,7 +237,8 @@ Actuá con autonomía en scripts, datos de zonas, saberes y herramientas de `too
 
 ## Por decidir
 
-- Modo de las puertas: ¿basta con tener el saber, o el jugador debe leer el dato en el
-  diario y usarlo (código, símbolo, palabra)?
-- Nombre del proyecto en `project.godot` (hoy figura como "Plataforma 2d").
+- Un **hub** central que conecte las zonas (hoy el Bosque arranca directo y su puerta
+  lleva a Ruinas).
+- Puertas con **más de una pregunta** (una ronda) o variantes que pidan escribir el
+  dato en vez de elegir entre opciones.
 - Idiomas más allá de `es` y `en`, y fuente tipográfica para ellos.
