@@ -20,6 +20,17 @@ var _dir := 1.0
 var _dead := false
 
 
+## Nodo raiz del juego (main.gd). Los enemigos cuelgan del nodo "Mundo", asi que
+## se sube por los padres hasta encontrar el que expone la camara y los avisos.
+func _juego() -> Node:
+	var n := get_parent()
+	while n != null:
+		if n.has_method("mostrar_aviso"):
+			return n
+		n = n.get_parent()
+	return null
+
+
 func _ready() -> void:
 	add_to_group("enemy")
 	_art = ART.new()
@@ -141,8 +152,9 @@ func _die() -> void:
 	spores.position = Vector2(0.0, -12.0)
 	add_child(spores)
 
-	if get_parent() != null and get_parent().has_method("camera_shake"):
-		get_parent().camera_shake(2.2)
+	var juego := _juego()
+	if juego != null and juego.has_method("camera_shake"):
+		juego.camera_shake(2.2)
 
 	var t := create_tween()
 	t.tween_interval(0.35)

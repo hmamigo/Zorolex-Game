@@ -79,7 +79,7 @@ func _ready() -> void:
 func _build_sky() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = -100
-	mundo.add_child(layer)
+	add_child(layer)
 
 	var sky := ColorRect.new()
 	sky.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -120,7 +120,6 @@ void fragment() {
 	sky.material = mat
 	layer.add_child(sky)
 
-
 func _build_parallax() -> void:
 	# sol bajo entre la niebla
 	_single_layer(art.sun_glow(), Vector2(0.02, 0.01), Vector2(190.0, -62.0), -91, 3.1,
@@ -152,7 +151,7 @@ func _build_parallax() -> void:
 	pit.position = Vector2(-900.0, 0.0)
 	pit.scale = Vector2(300.0, 1.15)
 	pit.z_index = -30
-	mundo.add_child(pit)
+	add_child(pit)
 
 
 
@@ -173,7 +172,7 @@ func _single_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, scale
 		m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		s.material = m
 	node.add_child(s)
-	mundo.add_child(node)
+	add_child(node)
 	_layers.append({"node": node, "factor": factor, "base": base})
 
 
@@ -192,7 +191,7 @@ func _tiled_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, tiles:
 		if BG_SMOOTH:
 			s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		node.add_child(s)
-	mundo.add_child(node)
+	add_child(node)
 	_layers.append({"node": node, "factor": factor, "base": base})
 
 
@@ -481,7 +480,7 @@ func _add_gap_mist(left: float, right: float, seed: int) -> void:
 	mundo.add_child(s)
 
 	var start_x := s.position.x
-	var t := create_tween().set_loops()
+	var t := s.create_tween().set_loops()
 	t.tween_property(s, "position:x", start_x + 9.0, 6.0) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	t.tween_property(s, "position:x", start_x - 9.0, 6.0) \
@@ -1038,10 +1037,29 @@ func _on_saber_recogido(id: String) -> void:
 	mostrar_aviso("%s — %s" % [tr("SABER_ENCONTRADO"), nombre])
 
 
+## Nivel al que lleva cada puerta. Si una puerta no figura aca, se abre pero
+## no cambia de zona (por ejemplo, una puerta de una zona que todavia no existe).
+func _nivel_destino(id: String):
+	match id:
+		"puerta_ruinas_01":
+			return LEVEL_RUINAS
+		_:
+			return null
+
+
 ## Cuando se abre una puerta, cambia de zona si la puerta lo declara.
 func _on_puerta_abierta(id: String) -> void:
-	if id == "puerta_ruinas_01":
-		cargar_nivel(LEVEL_RUINAS)
+	var destino = _nivel_destino(id)
+	if destino != null and destino != _nivel:
+		cargar_nivel(destino)
+
+
+## Lo llama una puerta ya abierta (guardada de una partida anterior) cuando el
+## zorro la atraviesa, para no quedar encerrado sin poder seguir.
+func viajar_por_puerta(id: String) -> void:
+	var destino = _nivel_destino(id)
+	if destino != null and destino != _nivel:
+		cargar_nivel(destino)
 
 
 func _on_idioma_cambiado(_codigo: String) -> void:
