@@ -1006,9 +1006,14 @@ func _build_progress(layer: CanvasLayer) -> void:
 func _actualizar_contador() -> void:
 	if _saberes_label == null or _db == null or _nivel == null:
 		return
-	var zona := str(_nivel.ZONE_ID)
-	_saberes_label.text = tr("SABERES_CONTADOR") % [
-		_db.cantidad_recogidos(zona), _db.total(zona)]
+	# Contar solo los saberes que realmente estan en este nivel, no todos los
+	# archivos de data/saberes/ que compartan la zona.
+	var total_nivel: int = _nivel.SABERES.size()
+	var recogidos := 0
+	for data in _nivel.SABERES:
+		if _db.tiene(str(data["id"])):
+			recogidos += 1
+	_saberes_label.text = tr("SABERES_CONTADOR") % [recogidos, total_nivel]
 
 
 ## Mensaje breve arriba de la pantalla (saber encontrado, puerta cerrada).
