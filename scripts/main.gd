@@ -3,8 +3,20 @@ extends Node2D
 
 const P = preload("res://scripts/palette.gd")
 const ART = preload("res://scripts/pixel_art.gd")
-const LEVEL = preload("res://scripts/level_data.gd")
+const LEVEL_BOSQUE = preload("res://scripts/level_data.gd")
+const LEVEL_RUINAS = preload("res://scripts/level_ruinas.gd")
 const PLAYER_SCRIPT = preload("res://scripts/player.gd")
+const SABER_PICKUP = preload("res://scripts/saber_pickup.gd")
+const PUERTA = preload("res://scripts/puerta.gd")
+const DIARIO = preload("res://scripts/diario.gd")
+const PREGUNTA = preload("res://scripts/pregunta.gd")
+
+## Nivel de zona actualmente cargado (datos de geometria, saberes, puertas).
+var _nivel
+## Contenedor de todo lo que pertenece al mundo de la zona (plataformas,
+## decoracion, saberes, puertas, enemigos, parallax). Se reemplaza al cambiar
+## de zona, sin tocar al jugador, la camara ni la UI.
+var mundo: Node2D
 
 ## Suaviza las capas lejanas (bosque, copas, sol). false = pixeles duros como antes.
 const BG_SMOOTH := true
@@ -12,18 +24,35 @@ const BG_SMOOTH := true
 var art: ART
 var player: CharacterBody2D
 var camera: Camera2D
+var diario: CanvasLayer
+var pregunta: CanvasLayer
+var _db: Node
 
 var _layers: Array[Dictionary] = []
 var _rng := RandomNumberGenerator.new()
 var _shake := 0.0
 var _flash: ColorRect
 var _hint: Label
+var _saberes_label: Label
+var _aviso: Label
+var _aviso_tween: Tween
+var _pausas := 0
 
 
 func _ready() -> void:
 	_rng.seed = 20261028
+	# El autoload se busca por ruta para no depender del identificador global:
+	# los scripts SceneTree y un editor abierto antes del autoload no lo ven.
+	_db = get_node_or_null("/root/Saberes")
 	art = ART.new()
 	RenderingServer.set_default_clear_color(P.SKY_TOP)
+
+	# Nivel inicial: Bosque de Bruma.
+	_nivel = LEVEL_BOSQUE
+
+	mundo = Node2D.new()
+	mundo.name = "Mundo"
+	add_child(mundo)
 
 	_build_sky()
 	_build_parallax()
@@ -32,10 +61,16 @@ func _ready() -> void:
 	_build_ambient()
 	_build_player()
 	_build_enemies()
+	_build_saberes()
+	_build_doors()
 	_build_camera()
 	_build_ui()
 	_update_parallax()
 	_validate_level()
+	if _db != null:
+		_db.saber_recogido.connect(_on_saber_recogido)
+		_db.idioma_cambiado.connect(_on_idioma_cambiado)
+		_db.puerta_abierta.connect(_on_puerta_abierta)
 
 
 # =====================================================================
@@ -44,7 +79,7 @@ func _ready() -> void:
 func _build_sky() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = -100
-	add_child(layer)
+	mundo.add_child(layer)
 
 	var sky := ColorRect.new()
 	sky.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -117,7 +152,7 @@ func _build_parallax() -> void:
 	pit.position = Vector2(-900.0, 0.0)
 	pit.scale = Vector2(300.0, 1.15)
 	pit.z_index = -30
-	add_child(pit)
+	mundo.add_child(pit)
 
 
 
@@ -138,7 +173,7 @@ func _single_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, scale
 		m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		s.material = m
 	node.add_child(s)
-	add_child(node)
+	mundo.add_child(node)
 	_layers.append({"node": node, "factor": factor, "base": base})
 
 
@@ -157,7 +192,7 @@ func _tiled_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, tiles:
 		if BG_SMOOTH:
 			s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		node.add_child(s)
-	add_child(node)
+	mundo.add_child(node)
 	_layers.append({"node": node, "factor": factor, "base": base})
 
 
@@ -259,23 +294,23 @@ void fragment() {
 # =====================================================================
 func _build_world() -> void:
 	var seed := 0
-	for g in LEVEL.GROUNDS:
+	for g in _nivel.GROUNDS:
 		_create_platform(g, false, seed)
 		_dress_ground(g, seed)
 		seed += 1
 
-	for l in LEVEL.LEDGES:
+	for l in _nivel.LEDGES:
 		_create_platform(l, true, seed)
 		_dress_ledge(l, seed)
 		seed += 1
 
 	# sotobosque: arbustos y helechos al pie de cada tramo de suelo
 	seed = 0
-	for g in LEVEL.GROUNDS:
+	for g in _nivel.GROUNDS:
 		_dress_understory(g, 71 + seed * 13)
 		seed += 1
 
-	for prop in LEVEL.PROPS:
+	for prop in _nivel.PROPS:
 		_place_prop(prop)
 
 	# niebla que respira en la boca de cada barranco
@@ -298,7 +333,7 @@ func _place_prop(prop: Dictionary) -> void:
 
 ## Huecos entre tramos de suelo consecutivos, como Vector2(izquierda, derecha).
 func _ground_gaps() -> Array[Vector2]:
-	var sorted_grounds := LEVEL.GROUNDS.duplicate()
+	var sorted_grounds = _nivel.GROUNDS.duplicate()
 	sorted_grounds.sort_custom(func(a: Rect2, b: Rect2) -> bool: return a.position.x < b.position.x)
 	var gaps: Array[Vector2] = []
 	for i in range(1, sorted_grounds.size()):
@@ -324,9 +359,9 @@ func _validate_level() -> void:
 func _level_problems() -> Array[String]:
 	var problems: Array[String] = []
 	var boxes: Array[Rect2] = []
-	boxes.append_array(LEVEL.GROUNDS)
-	boxes.append_array(LEVEL.LEDGES)
-	var ground_count := LEVEL.GROUNDS.size()
+	boxes.append_array(_nivel.GROUNDS)
+	boxes.append_array(_nivel.LEDGES)
+	var ground_count: int = _nivel.GROUNDS.size()
 
 	for i in boxes.size():
 		for j in range(i + 1, boxes.size()):
@@ -340,13 +375,13 @@ func _level_problems() -> Array[String]:
 		if gap > jump.x:
 			problems.append("el barranco de %.0f px en x=%.0f supera el salto (%.0f px)" % [gap, grounds[i - 1].end.x, jump.x])
 
-	for enemy in LEVEL.ENEMIES:
+	for enemy in _nivel.ENEMIES:
 		var pos: Vector2 = enemy["pos"]
 		var ground_index := _ground_at(pos.x)
 		if ground_index < 0:
 			problems.append("el hongo en x=%.0f no esta sobre ningun tramo de suelo" % pos.x)
 			continue
-		var ground: Rect2 = LEVEL.GROUNDS[ground_index]
+		var ground: Rect2 = _nivel.GROUNDS[ground_index]
 		if enemy.has("patrol"):
 			var patrol: Vector2 = enemy["patrol"]
 			var left := patrol.x
@@ -372,14 +407,14 @@ func _jump_envelope() -> Vector2:
 ## Tramos de suelo ordenados de izquierda a derecha.
 func _sorted_grounds() -> Array[Rect2]:
 	var grounds: Array[Rect2] = []
-	grounds.append_array(LEVEL.GROUNDS)
+	grounds.append_array(_nivel.GROUNDS)
 	grounds.sort_custom(func(a: Rect2, b: Rect2) -> bool: return a.position.x < b.position.x)
 	return grounds
 
 
 func _ground_at(x: float) -> int:
-	for i in LEVEL.GROUNDS.size():
-		var g: Rect2 = LEVEL.GROUNDS[i]
+	for i in _nivel.GROUNDS.size():
+		var g: Rect2 = _nivel.GROUNDS[i]
 		if x >= g.position.x and x <= g.end.x:
 			return i
 	return -1
@@ -388,9 +423,9 @@ func _ground_at(x: float) -> int:
 ## Indices de repisas inalcanzables, propagando desde el suelo hacia arriba.
 func _unreachable_boxes() -> Array[int]:
 	var boxes: Array[Rect2] = []
-	boxes.append_array(LEVEL.GROUNDS)
-	boxes.append_array(LEVEL.LEDGES)
-	var ground_count := LEVEL.GROUNDS.size()
+	boxes.append_array(_nivel.GROUNDS)
+	boxes.append_array(_nivel.LEDGES)
+	var ground_count: int = _nivel.GROUNDS.size()
 	var jump := _jump_envelope()
 
 	var reachable: Array[bool] = []
@@ -443,7 +478,7 @@ func _add_gap_mist(left: float, right: float, seed: int) -> void:
 	s.scale = Vector2(0.62, 0.62)
 	s.modulate = Color(1.0, 1.0, 1.0, 0.7)
 	s.z_index = 3
-	add_child(s)
+	mundo.add_child(s)
 
 	var start_x := s.position.x
 	var t := create_tween().set_loops()
@@ -473,7 +508,7 @@ func _create_platform(rect: Rect2, floating: bool, seed: int) -> void:
 	visual.position = Vector2.ZERO
 	body.add_child(visual)
 
-	add_child(body)
+	mundo.add_child(body)
 
 
 func _dress_ground(rect: Rect2, seed: int) -> void:
@@ -510,7 +545,7 @@ func _dress_ground(rect: Rect2, seed: int) -> void:
 			s.position = Vector2(side + rng.randf_range(-8.0, 8.0) + i * 4.0, 2.0)
 			s.scale = Vector2(1.0, rng.randf_range(1.0, 1.45))
 			s.z_index = 3
-			add_child(s)
+			mundo.add_child(s)
 
 
 func _dress_understory(rect: Rect2, seed: int) -> void:
@@ -543,7 +578,7 @@ func _dress_ledge(rect: Rect2, seed: int) -> void:
 		s.centered = false
 		s.position = Vector2(x, rect.position.y + rect.size.y - 1.0)
 		s.z_index = 2
-		add_child(s)
+		mundo.add_child(s)
 
 	# pedrusco de tierra que cuelga de la panza de la repisa
 	if rng.randf() < 0.72:
@@ -554,7 +589,7 @@ func _dress_ledge(rect: Rect2, seed: int) -> void:
 		b.centered = false
 		b.position = Vector2(bx - float(beard.get_width()) * 0.5, rect.position.y + rect.size.y - 2.0)
 		b.z_index = 1
-		add_child(b)
+		mundo.add_child(b)
 
 
 func _place(tex: Texture2D, pos: Vector2, z: int, scale := 1.0) -> void:
@@ -564,7 +599,7 @@ func _place(tex: Texture2D, pos: Vector2, z: int, scale := 1.0) -> void:
 	s.scale = Vector2(scale, scale)
 	s.position = Vector2(pos.x, pos.y - tex.get_height() * scale * 0.5)
 	s.z_index = z
-	add_child(s)
+	mundo.add_child(s)
 
 
 # =====================================================================
@@ -599,7 +634,7 @@ func _build_ambient() -> void:
 	var fly_mat := CanvasItemMaterial.new()
 	fly_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	flies.material = fly_mat
-	add_child(flies)
+	mundo.add_child(flies)
 
 	# hojas que caen
 	var leaves := CPUParticles2D.new()
@@ -623,7 +658,7 @@ func _build_ambient() -> void:
 	leaves.z_index = 7
 	leaves.local_coords = false
 	leaves.color = Color(1.0, 0.94, 0.8, 0.78)
-	add_child(leaves)
+	mundo.add_child(leaves)
 
 
 # =====================================================================
@@ -633,15 +668,15 @@ func _build_player() -> void:
 	var p := CharacterBody2D.new()
 	p.name = "Zorro"
 	p.set_script(PLAYER_SCRIPT)
-	p.position = LEVEL.SPAWN
+	p.position = _nivel.SPAWN
 	p.z_index = 5
 	add_child(p)
-	p.set("respawn_position", LEVEL.SPAWN)
+	p.set("respawn_position", _nivel.SPAWN)
 	player = p
 
 
 func _build_enemies() -> void:
-	for enemy in LEVEL.ENEMIES:
+	for enemy in _nivel.ENEMIES:
 		var pos: Vector2 = enemy["pos"]
 		var patrol: Vector2 = enemy.get("patrol", _patrol_for(pos))
 		_spawn_enemy(pos, patrol.x, patrol.y)
@@ -652,8 +687,8 @@ func _patrol_for(pos: Vector2) -> Vector2:
 	var ground_index := _ground_at(pos.x)
 	if ground_index < 0:
 		return Vector2(pos.x - 120.0, pos.x + 120.0)
-	var g: Rect2 = LEVEL.GROUNDS[ground_index]
-	return Vector2(g.position.x + LEVEL.PATROL_MARGIN, g.end.x - LEVEL.PATROL_MARGIN)
+	var g: Rect2 = _nivel.GROUNDS[ground_index]
+	return Vector2(g.position.x + _nivel.PATROL_MARGIN, g.end.x - _nivel.PATROL_MARGIN)
 
 
 func _spawn_enemy(pos: Vector2, left: float, right: float) -> void:
@@ -664,7 +699,61 @@ func _spawn_enemy(pos: Vector2, left: float, right: float) -> void:
 	e.z_index = 4
 	e.set("patrol_left", left)
 	e.set("patrol_right", right)
-	add_child(e)
+	mundo.add_child(e)
+
+
+# =====================================================================
+#  Saberes y puertas
+# =====================================================================
+func _build_saberes() -> void:
+	for data in _nivel.SABERES:
+		var id: String = data["id"]
+		if _db != null and _db.tiene(id):
+			continue
+		var s := Area2D.new()
+		s.name = "Saber_" + id
+		s.set_script(SABER_PICKUP)
+		s.set("saber_id", id)
+		s.position = data["pos"]
+		mundo.add_child(s)
+
+
+func _build_doors() -> void:
+	for data in _nivel.DOORS:
+		var d := StaticBody2D.new()
+		d.name = "Puerta_" + str(data["id"])
+		d.set_script(PUERTA)
+		d.set("puerta_id", data["id"])
+		d.set("requires", data["requires"])
+		d.set("pregunta_de", str(data.get("pregunta_de", "")))
+		d.position = data["pos"]
+		mundo.add_child(d)
+
+
+## Cambia al nivel de zona indicado: reemplaza el mundo (plataformas,
+## decoracion, saberes, puertas, enemigos) y reposiciona al jugador y la
+## camara en el nuevo spawn. El fondo, el marco de pantalla y la UI se
+## conservan.
+func cargar_nivel(nuevo_nivel: RefCounted) -> void:
+	_nivel = nuevo_nivel
+	if mundo != null:
+		mundo.queue_free()
+	mundo = Node2D.new()
+	mundo.name = "Mundo"
+	add_child(mundo)
+
+	_build_world()
+	_build_ambient()
+	_build_enemies()
+	_build_saberes()
+	_build_doors()
+
+	if player != null:
+		player.global_position = _nivel.SPAWN
+		player.respawn_position = _nivel.SPAWN
+	if camera != null:
+		camera.global_position = player.global_position + Vector2(0.0, -78.0)
+	_update_parallax()
 
 
 # =====================================================================
@@ -690,7 +779,7 @@ func _process(delta: float) -> void:
 		player.global_position.y - 78.0
 	)
 	var half := get_viewport_rect().size * 0.5 / camera.zoom
-	var bounds: Rect2 = LEVEL.CAM_BOUNDS
+	var bounds: Rect2 = _nivel.CAM_BOUNDS
 	target.x = clampf(target.x, bounds.position.x + half.x, bounds.end.x - half.x)
 	target.y = clampf(target.y, bounds.position.y, bounds.end.y)
 	camera.global_position = camera.global_position.lerp(target, 1.0 - exp(-7.5 * delta))
@@ -753,6 +842,34 @@ void fragment() {
 
 	_build_title(layer)
 	_build_hint(layer)
+	_build_progress(layer)
+
+	var d := DIARIO.new()
+	add_child(d)
+	diario = d
+	diario.abierto.connect(_on_diario_abierto)
+
+	var q := PREGUNTA.new()
+	add_child(q)
+	pregunta = q
+
+
+## El diario y la pregunta comparten la pausa; si el zorro abre el diario
+## desde la pregunta, la pregunta espera abajo y vuelve al cerrarlo.
+func _on_diario_abierto() -> void:
+	if pregunta != null and pregunta.visible:
+		pregunta.ceder_al_diario()
+
+
+## Pausa compartida: cerrar una capa no reanuda el juego si la otra sigue abierta.
+func pausar() -> void:
+	_pausas += 1
+	get_tree().paused = _pausas > 0
+
+
+func reanudar() -> void:
+	_pausas = maxi(0, _pausas - 1)
+	get_tree().paused = _pausas > 0
 
 
 func _build_title(layer: CanvasLayer) -> void:
@@ -830,7 +947,7 @@ func _build_title(layer: CanvasLayer) -> void:
 
 func _build_hint(layer: CanvasLayer) -> void:
 	_hint = Label.new()
-	_hint.text = "←  →   moverse        ESPACIO   saltar"
+	_hint.text = tr("PISTA_CONTROLES")
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.anchor_left = 0.0
 	_hint.anchor_right = 1.0
@@ -850,3 +967,77 @@ func _build_hint(layer: CanvasLayer) -> void:
 	var t := create_tween()
 	t.tween_interval(1.1)
 	t.tween_property(_hint, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT)
+
+
+# =====================================================================
+#  Saberes en pantalla
+# =====================================================================
+func _build_progress(layer: CanvasLayer) -> void:
+	_saberes_label = Label.new()
+	_saberes_label.name = "ContadorSaberes"
+	_saberes_label.position = Vector2(24.0, 16.0)
+	_saberes_label.add_theme_font_size_override("font_size", 14)
+	_saberes_label.add_theme_color_override("font_color", Color(0.97, 0.93, 0.82, 0.82))
+	_saberes_label.add_theme_color_override("font_shadow_color", Color(0.06, 0.05, 0.04, 0.8))
+	_saberes_label.add_theme_constant_override("shadow_offset_x", 1)
+	_saberes_label.add_theme_constant_override("shadow_offset_y", 2)
+	_saberes_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_saberes_label)
+	_actualizar_contador()
+
+	_aviso = Label.new()
+	_aviso.name = "Aviso"
+	_aviso.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_aviso.anchor_left = 0.0
+	_aviso.anchor_right = 1.0
+	_aviso.offset_top = 60.0
+	_aviso.offset_bottom = 96.0
+	_aviso.add_theme_font_size_override("font_size", 17)
+	_aviso.add_theme_color_override("font_color", P.CREAM)
+	_aviso.add_theme_color_override("font_shadow_color", Color(0.06, 0.05, 0.04, 0.85))
+	_aviso.add_theme_constant_override("shadow_offset_x", 1)
+	_aviso.add_theme_constant_override("shadow_offset_y", 2)
+	_aviso.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_aviso.modulate.a = 0.0
+	layer.add_child(_aviso)
+
+
+func _actualizar_contador() -> void:
+	if _saberes_label == null or _db == null:
+		return
+	_saberes_label.text = tr("SABERES_CONTADOR") % [
+		_db.cantidad_recogidos(), _db.total()]
+
+
+## Mensaje breve arriba de la pantalla (saber encontrado, puerta cerrada).
+func mostrar_aviso(texto: String) -> void:
+	if _aviso == null:
+		return
+	_aviso.text = texto
+	_aviso.modulate.a = 0.0
+	if _aviso_tween != null and _aviso_tween.is_valid():
+		_aviso_tween.kill()
+	_aviso_tween = create_tween()
+	_aviso_tween.tween_property(_aviso, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
+	_aviso_tween.tween_interval(2.2)
+	_aviso_tween.tween_property(_aviso, "modulate:a", 0.0, 0.5).set_ease(Tween.EASE_IN)
+
+
+func _on_saber_recogido(id: String) -> void:
+	_actualizar_contador()
+	var nombre := id
+	if _db != null:
+		nombre = str(_db.titulo(id))
+	mostrar_aviso("%s — %s" % [tr("SABER_ENCONTRADO"), nombre])
+
+
+## Cuando se abre una puerta, cambia de zona si la puerta lo declara.
+func _on_puerta_abierta(id: String) -> void:
+	if id == "puerta_ruinas_01":
+		cargar_nivel(LEVEL_RUINAS)
+
+
+func _on_idioma_cambiado(_codigo: String) -> void:
+	_actualizar_contador()
+	if _hint != null:
+		_hint.text = tr("PISTA_CONTROLES")

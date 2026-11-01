@@ -1,0 +1,42 @@
+{
+  "id": "piedra_de_rosetta",
+  "zona": "ruinas",
+  "tema": "historia",
+  "titulo": {
+    "es": "La Piedra de Rosetta",
+    "en": "The Rosetta Stone"
+  },
+  "texto": {
+    "es": "La Piedra de Rosetta es un fragmento de una estela egipcia de granodiorita inscrita en 196 a. C. con un decreto del rey Ptolomeo V. El mismo texto aparece en tres escrituras: jeroglíficos, demótico y griego antiguo. Gracias a esa repetición, el egiptólogo Jean-François Champollion pudo descifrar los jeroglíficos en 1822, abriendo el camino a la lectura de la escritura del antiguo Egipto. La piedra fue hallada por soldados franceses en julio de 1799 cerca de Rashid (Rosetta), en el delta del Nilo, y desde 1802 se exhibe en el Museo Británico de Londres.",
+    "en": "The Rosetta Stone is a fragment of an Egyptian granodiority stele inscribed in 196 BC with a decree of King Ptolemy V. The same text appears in three scripts: hieroglyphs, demotic and ancient Greek. Thanks to that repetition, the Egyptologist Jean-François Champollion was able to decipher hieroglyphs in 1822, opening the way to read the writing of ancient Egypt. The stone was found by French soldiers in July 1799 near Rashid (Rosetta), in the Nile Delta, and has been on display at the British Museum in London since 1802."
+  },
+  "dato": {
+    "tipo": "numero",
+    "valor": { "es": "196 a.C.", "en": "196 BC" }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿En qué año se emitió el decreto inscrito en la Piedra de Rosetta?",
+      "opciones": ["196 a.C.", "396 d.C.", "1799"]
+    },
+    "en": {
+      "enunciado": "In what year was the decree inscribed on the Rosetta Stone issued?",
+      "opciones": ["196 BC", "396 AD", "1799"]
+    }
+  },
+  "desbloquea": ["puerta_cueva_01"],
+  "fuentes": [
+    {
+      "titulo": "Piedra de Rosetta",
+      "url": "https://es.wikipedia.org/wiki/Piedra_de_Rosetta",
+      "idioma": "es",
+      "consultado": "2026-11-01"
+    },
+    {
+      "titulo": "Rosetta Stone",
+      "url": "https://en.wikipedia.org/wiki/Rosetta_Stone",
+      "idioma": "en",
+      "consultado": "2026-11-01"
+    }
+  ]
+}

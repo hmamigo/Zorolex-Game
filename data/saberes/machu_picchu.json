@@ -1,0 +1,42 @@
+{
+  "id": "machu_picchu",
+  "zona": "ruinas",
+  "tema": "historia",
+  "titulo": {
+    "es": "Machu Picchu, la ciudad inca",
+    "en": "Machu Picchu, the Inca city"
+  },
+  "texto": {
+    "es": "Machu Picchu es una llacta incaica construida hacia 1450 por orden de Pachacútec, en la cordillera de los Andes peruanos a 2.430 metros sobre el nivel del mar. Combina arquitectura de piedra fina con andenes de cultivo y un avanzado sistema de drenaje. Aunque nunca estuvo realmente perdida —aguardaban allí familias campesinas—, fue el explorador Hiram Bingham quien la dio a conocer al mundo en 1911, guiado por el arrendatario Agustín Lizárraga, que ya la había visitado en 1902. Desde 1983 forma parte del Patrimonio Mundial de la Unesco.",
+    "en": "Machu Picchu is an Inca llacta built around 1450 by order of Pachacútec, in the Andes of Peru at 2,430 meters above sea level. It combines fine stone architecture with agricultural terraces and an advanced drainage system. Although it was never truly lost —peasant families still lived there—, it was the explorer Hiram Bingham who made it known to the world in 1911, guided by the tenant Agustín Lizárraga, who had already visited it in 1902. Since 1983 it has been part of the UNESCO World Heritage list."
+  },
+  "dato": {
+    "tipo": "numero",
+    "valor": { "es": "1450", "en": "1450" }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿Hacia qué año se mandó construir Machu Picchu?",
+      "opciones": ["1450", "1534", "1911"]
+    },
+    "en": {
+      "enunciado": "Toward what year was Machu Picchu ordered to be built?",
+      "opciones": ["1450", "1534", "1911"]
+    }
+  },
+  "desbloquea": ["puerta_cueva_01"],
+  "fuentes": [
+    {
+      "titulo": "Machu Picchu",
+      "url": "https://es.wikipedia.org/wiki/Machu_Picchu",
+      "idioma": "es",
+      "consultado": "2026-11-01"
+    },
+    {
+      "titulo": "Machu Picchu",
+      "url": "https://en.wikipedia.org/wiki/Machu_Picchu",
+      "idioma": "en",
+      "consultado": "2026-11-01"
+    }
+  ]
+}
