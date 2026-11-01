@@ -1,0 +1,42 @@
+{
+  "id": "micorrizas",
+  "zona": "bosque_de_bruma",
+  "tema": "ciencias_naturales",
+  "titulo": {
+    "es": "La red de las micorrizas",
+    "en": "The mycorrhizal network"
+  },
+  "texto": {
+    "es": "Una micorriza es una sociedad entre un hongo y las raíces de una planta. El hongo extiende sus hifas por el suelo y le acerca agua y minerales; la planta, a cambio, le entrega azúcares que fabrica con la fotosíntesis. Se estima que entre el 90 y el 95 % de las familias de plantas terrestres forman micorrizas de manera habitual. Bajo un bosque sano late, entonces, una red subterránea que conecta raíces, hongos y materia en descomposición.",
+    "en": "A mycorrhiza is a partnership between a fungus and plant roots. The fungus spreads its hyphae through the soil and brings water and minerals to the plant; in return, the plant gives it sugars made by photosynthesis. An estimated 90 to 95% of land plant families normally form mycorrhizae. Under a healthy forest, then, runs an underground network linking roots, fungi and decaying matter, one that helps trees grow and survive."
+  },
+  "dato": {
+    "tipo": "numero",
+    "valor": { "es": "90 %", "en": "90%" }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿Cuál es el porcentaje mínimo estimado de familias de plantas terrestres que forman micorrizas?",
+      "opciones": ["50 %", "90 %", "99 %"]
+    },
+    "en": {
+      "enunciado": "What is the lowest estimated share of land plant families that form mycorrhizae?",
+      "opciones": ["50%", "90%", "99%"]
+    }
+  },
+  "desbloquea": ["puerta_ruinas_01"],
+  "fuentes": [
+    {
+      "titulo": "Micorriza",
+      "url": "https://es.wikipedia.org/wiki/Micorriza",
+      "idioma": "es",
+      "consultado": "2026-10-31"
+    },
+    {
+      "titulo": "Mycorrhiza",
+      "url": "https://en.wikipedia.org/wiki/Mycorrhiza",
+      "idioma": "en",
+      "consultado": "2026-10-31"
+    }
+  ]
+}

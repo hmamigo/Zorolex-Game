@@ -1,0 +1,42 @@
+{
+  "id": "musgo",
+  "zona": "bosque_de_bruma",
+  "tema": "ciencias_naturales",
+  "titulo": {
+    "es": "La esponja verde",
+    "en": "The green sponge"
+  },
+  "texto": {
+    "es": "Los musgos son plantas pequeñas y sin vasos conductores: no tienen raíces verdaderas ni transportan agua a larga distancia. Absorben la humedad directamente por sus hojas, que suelen tener una sola célula de grosor, y por eso dependen de la sombra y del aire húmedo. La mayoría mide entre 1 y 10 cm, aunque algunas especies superan esa talla. Crecen formando alfombras verdes sobre troncos, piedras y suelos, y retienen agua como una esponja.",
+    "en": "Mosses are small plants without conducting vessels: they have no true roots and do not carry water over long distances. They absorb moisture directly through their leaves, which are often only one cell thick, so they depend on shade and humid air. Most are between 1 and 10 cm tall, though some species grow larger. They form green carpets over logs, stones and soil, and hold water like a sponge."
+  },
+  "dato": {
+    "tipo": "numero",
+    "valor": { "es": "1 a 10 cm", "en": "1 to 10 cm" }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿Cuánto mide la mayoría de los musgos?",
+      "opciones": ["10 a 50 cm", "1 a 3 m", "1 a 10 cm"]
+    },
+    "en": {
+      "enunciado": "How tall are most mosses?",
+      "opciones": ["10 to 50 cm", "1 to 3 m", "1 to 10 cm"]
+    }
+  },
+  "desbloquea": ["puerta_ruinas_01"],
+  "fuentes": [
+    {
+      "titulo": "Bryophyta sensu stricto",
+      "url": "https://es.wikipedia.org/wiki/Bryophyta_sensu_stricto",
+      "idioma": "es",
+      "consultado": "2026-10-31"
+    },
+    {
+      "titulo": "Moss",
+      "url": "https://en.wikipedia.org/wiki/Moss",
+      "idioma": "en",
+      "consultado": "2026-10-31"
+    }
+  ]
+}

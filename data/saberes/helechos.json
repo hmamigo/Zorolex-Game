@@ -1,0 +1,45 @@
+{
+  "id": "helechos",
+  "zona": "bosque_de_bruma",
+  "tema": "ciencias_naturales",
+  "titulo": {
+    "es": "Helechos sin semillas",
+    "en": "Ferns without seeds"
+  },
+  "texto": {
+    "es": "Los helechos son plantas vasculares que no producen semillas ni flores. Se reproducen por esporas, unas células diminutas que liberan desde los soros, las manchas oscuras del envés de las frondas. Si una espora cae en un lugar húmedo, crece una planta breve llamada gametófito, de la que nace un nuevo helecho. Muchos despliegan sus hojas enrolladas en espiral, como un báculo, y necesitan sombra y humedad constante para prosperar.",
+    "en": "Ferns are vascular plants that produce neither seeds nor flowers. They reproduce by spores, tiny cells released from sori, the dark patches on the underside of their fronds. If a spore lands in a damp place, it grows into a short-lived plant called a gametophyte, from which a new fern emerges. Many unfurl their leaves in tight spirals, like a shepherd's crook, and need shade and constant moisture to thrive."
+  },
+  "dato": {
+    "tipo": "palabra",
+    "valor": {
+      "es": "esporas",
+      "en": "spores"
+    }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿Cómo se reproducen los helechos?",
+      "opciones": ["Semillas", "Esporas", "Flores"]
+    },
+    "en": {
+      "enunciado": "How do ferns reproduce?",
+      "opciones": ["Seeds", "Spores", "Flowers"]
+    }
+  },
+  "desbloquea": ["puerta_ruinas_01"],
+  "fuentes": [
+    {
+      "titulo": "Filicopsida",
+      "url": "https://es.wikipedia.org/wiki/Filicopsida",
+      "idioma": "es",
+      "consultado": "2026-10-31"
+    },
+    {
+      "titulo": "Fern",
+      "url": "https://en.wikipedia.org/wiki/Fern",
+      "idioma": "en",
+      "consultado": "2026-10-31"
+    }
+  ]
+}

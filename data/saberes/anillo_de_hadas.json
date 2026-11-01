@@ -1,0 +1,42 @@
+{
+  "id": "anillo_de_hadas",
+  "zona": "bosque_de_bruma",
+  "tema": "ciencias_naturales",
+  "titulo": {
+    "es": "El corro de brujas",
+    "en": "The fairy ring"
+  },
+  "texto": {
+    "es": "Un corro de brujas es un anillo de setas que aparece en prados y bosques. No hay magia en él: lo dibuja el micelio de un hongo que crece hacia afuera desde un punto central y agota los nutrientes del interior. En la hierba se notan bandas más oscuras o más verdes, y a veces el centro queda mustio. Algunos anillos superan los 10 m de diámetro y siguen creciendo mientras el hongo encuentra alimento bajo tierra.",
+    "en": "A fairy ring is a ring or arc of mushrooms that appears in meadows and forests. There is no magic in it: it is drawn by a fungus whose mycelium grows outward from a central point, using up the nutrients inside. The grass shows darker or greener bands, and sometimes the center withers. Some rings grow to over 10 metres in diameter and keep expanding as the fungus finds food underground."
+  },
+  "dato": {
+    "tipo": "numero",
+    "valor": { "es": "10 m", "en": "10 m" }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿Qué diámetro pueden superar algunos corros de brujas?",
+      "opciones": ["10 m", "1 m", "100 m"]
+    },
+    "en": {
+      "enunciado": "What diameter can some fairy rings exceed?",
+      "opciones": ["10 m", "1 m", "100 m"]
+    }
+  },
+  "desbloquea": ["puerta_ruinas_01"],
+  "fuentes": [
+    {
+      "titulo": "Corro de brujas",
+      "url": "https://es.wikipedia.org/wiki/Corro_de_brujas",
+      "idioma": "es",
+      "consultado": "2026-10-31"
+    },
+    {
+      "titulo": "Fairy ring",
+      "url": "https://en.wikipedia.org/wiki/Fairy_ring",
+      "idioma": "en",
+      "consultado": "2026-10-31"
+    }
+  ]
+}

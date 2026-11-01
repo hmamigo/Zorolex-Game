@@ -1,0 +1,51 @@
+{
+  "id": "luz_de_luciernaga",
+  "zona": "bosque_de_bruma",
+  "tema": "ciencias_naturales",
+  "titulo": {
+    "es": "La luz de la luciérnaga",
+    "en": "The light of the firefly"
+  },
+  "texto": {
+    "es": "Las luciérnagas son escarabajos de la familia Lampyridae, famosos por producir su propia luz. El destello nace de una reacción química entre la luciferina, la enzima luciferasa, oxígeno y energía. Los adultos lo usan sobre todo para encontrarse al crepúsculo, y las larvas también brillan. Se han descrito al menos 1900 especies, muchas en bosques húmedos y praderas. En el Bosque de Bruma aparecen al anochecer, cuando la niebla ya cubre el suelo.",
+    "en": "Fireflies are beetles of the family Lampyridae, famous for making their own light. The flash comes from a chemical reaction between luciferin, the enzyme luciferase, oxygen and energy. Adults use it mainly to find mates at dusk, and their larvae glow as well. More than 2,400 species have been described, many of them in damp forests and meadows. In the Misty Forest they appear at nightfall, when fog has already settled over the ground."
+  },
+  "dato": {
+    "tipo": "palabra",
+    "valor": {
+      "es": "luciferasa",
+      "en": "luciferase"
+    }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿Qué enzima produce la luz de la luciérnaga?",
+      "opciones": ["Clorofila", "Melanina", "Luciferasa"]
+    },
+    "en": {
+      "enunciado": "Which enzyme produces a firefly's light?",
+      "opciones": ["Chlorophyll", "Melanin", "Luciferase"]
+    }
+  },
+  "desbloquea": ["puerta_ruinas_01"],
+  "fuentes": [
+    {
+      "titulo": "Lampyridae",
+      "url": "https://es.wikipedia.org/wiki/Lampyridae",
+      "idioma": "es",
+      "consultado": "2026-10-31"
+    },
+    {
+      "titulo": "Firefly",
+      "url": "https://en.wikipedia.org/wiki/Firefly",
+      "idioma": "en",
+      "consultado": "2026-10-31"
+    },
+    {
+      "titulo": "Luciferase",
+      "url": "https://en.wikipedia.org/wiki/Luciferase",
+      "idioma": "en",
+      "consultado": "2026-10-31"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "id": "niebla",
+  "zona": "bosque_de_bruma",
+  "tema": "ciencias_naturales",
+  "titulo": {
+    "es": "Una nube a ras del suelo",
+    "en": "A cloud at ground level"
+  },
+  "texto": {
+    "es": "La niebla es una nube que se forma muy cerca del suelo, hecha de gotitas de agua tan pequeñas que quedan suspendidas en el aire. En meteorología se habla de niebla cuando la visibilidad horizontal baja a menos de 1 km. En el bosque moja hojas, musgos y telarañas sin que llueva, y al moverse con el viento cambia los contornos de todo. Por eso los caminos parecen más largos al atardecer, cuando la luz se vuelve dorada.",
+    "en": "Fog is a cloud that forms very close to the ground, made of water droplets so small that they stay suspended in the air. In meteorology it is called fog when horizontal visibility drops below 1 km. In the forest it wets leaves, moss and spiderwebs without rain, and as it moves with the wind it changes the outline of everything. That is why paths seem longer at dusk, when the light turns golden."
+  },
+  "dato": {
+    "tipo": "numero",
+    "valor": { "es": "1 km", "en": "1 km" }
+  },
+  "pregunta": {
+    "es": {
+      "enunciado": "¿Por debajo de qué visibilidad horizontal se habla de niebla?",
+      "opciones": ["1 km", "10 km", "100 m"]
+    },
+    "en": {
+      "enunciado": "Below what horizontal visibility is it called fog?",
+      "opciones": ["1 km", "10 km", "100 m"]
+    }
+  },
+  "desbloquea": ["puerta_ruinas_01"],
+  "fuentes": [
+    {
+      "titulo": "Niebla",
+      "url": "https://es.wikipedia.org/wiki/Niebla",
+      "idioma": "es",
+      "consultado": "2026-10-31"
+    },
+    {
+      "titulo": "Fog",
+      "url": "https://en.wikipedia.org/wiki/Fog",
+      "idioma": "en",
+      "consultado": "2026-10-31"
+    }
+  ]
+}
