@@ -1054,6 +1054,114 @@ func sign() -> ImageTexture:
 
 
 # =====================================================================
+#  Saberes y puertas
+# =====================================================================
+## Hoja de luz que flota en el mundo: el soporte fisico de un saber.
+func saber_page() -> ImageTexture:
+	var img := _image(16, 20)
+	# sombra de la hoja
+	_fill(img, 2, 2, 12, 17, P.CREAM_D)
+	# pergamino
+	_fill(img, 3, 1, 10, 17, P.CREAM)
+	_fill(img, 3, 1, 10, 1, P.SUN_CORE)
+	# rollos de los bordes
+	_fill(img, 1, 3, 14, 2, P.CREAM_D)
+	_fill(img, 1, 15, 14, 2, P.CREAM_D)
+	_fill(img, 2, 3, 12, 1, P.CREAM)
+	_fill(img, 2, 15, 12, 1, P.CREAM)
+	# renglones tenues
+	for y in range(6, 14, 3):
+		_fill(img, 5, y, 6, 1, P.CREAM_D)
+	# runa central: estrella de cuatro puntas
+	for i in range(5):
+		var a := 1.0 - float(i) / 5.0
+		var c := P.GOLD.lerp(P.SUN_CORE, a * 0.55)
+		_px(img, 8, 4 + i, c)
+		_px(img, 8, 15 - i, c)
+		_px(img, 4 + i, 9, c)
+		_px(img, 12 - i, 9, c)
+	for i in range(3):
+		_px(img, 8 + i, 9 - i, P.GOLD)
+		_px(img, 8 - i, 9 - i, P.GOLD)
+		_px(img, 8 + i, 9 + i, P.GOLD)
+		_px(img, 8 - i, 9 + i, P.GOLD)
+	return ImageTexture.create_from_image(img)
+
+
+## Marco de piedra de una puerta, sin las hojas. Se ancla en el suelo.
+func door_frame() -> ImageTexture:
+	var img := _image(72, 160)
+	# pilares
+	for side in [0, 60]:
+		_fill(img, side, 0, 12, 160, P.STONE_D)
+		_fill(img, side + 1, 2, 9, 156, P.STONE)
+		_fill(img, side + 1, 2, 2, 156, P.STONE_L)
+		_fill(img, side + 9, 2, 1, 156, P.STONE_D)
+	# dintel
+	_fill(img, 0, 0, 72, 16, P.STONE_D)
+	_fill(img, 1, 2, 70, 11, P.STONE)
+	_fill(img, 2, 2, 68, 2, P.STONE_L)
+	# dovelas marcadas
+	for x in range(8, 68, 9):
+		_fill(img, x, 4, 1, 9, P.STONE_D)
+	# runa del dintel
+	_px(img, 36, 5, P.GOLD)
+	_px(img, 35, 6, P.GOLD)
+	_px(img, 37, 6, P.GOLD)
+	_px(img, 34, 7, P.GOLD)
+	_px(img, 38, 7, P.GOLD)
+	_px(img, 35, 8, P.GOLD)
+	_px(img, 37, 8, P.GOLD)
+	_px(img, 36, 9, P.GOLD)
+	# desgaste y musgo en la base
+	for i in range(10):
+		var x := 14 + (i * 13) % 48
+		_px(img, x, 22 + (i * 7) % 120, P.STONE_D)
+	_fill(img, 0, 150, 12, 10, P.MOSS)
+	_fill(img, 60, 150, 12, 10, P.MOSS)
+	_fill(img, 0, 157, 12, 3, P.MOSS_L)
+	_fill(img, 60, 157, 12, 3, P.MOSS_L)
+	_px(img, 1, 148, P.MOSS_L)
+	_px(img, 70, 149, P.MOSS_L)
+	return ImageTexture.create_from_image(img)
+
+
+## Hoja de piedra de la puerta: se dibuja dos veces, espejada. Las dos mitades
+## forman un aro runico cuando estan cerradas.
+func door_leaf() -> ImageTexture:
+	var img := _image(24, 144)
+	_fill(img, 0, 0, 24, 144, P.STONE_D)
+	_fill(img, 1, 1, 22, 142, P.STONE)
+	# lado interior iluminado
+	_fill(img, 21, 1, 2, 142, P.STONE_L)
+	_fill(img, 23, 1, 1, 142, P.STONE_D)
+	# vetas y juntas de los bloques
+	for y in range(0, 144, 22):
+		_fill(img, 1, y, 22, 1, P.STONE_D)
+		_px(img, 4 + (y * 3) % 14, y + 1, P.STONE_L)
+	for i in range(9):
+		_px(img, 3 + (i * 17) % 18, 6 + (i * 29) % 132, P.STONE_D)
+	# cerrojo
+	_fill(img, 17, 12, 4, 10, P.STONE_D)
+	_fill(img, 18, 13, 2, 8, P.LEATH_D)
+	_px(img, 18, 16, P.GOLD)
+	_px(img, 19, 17, P.GOLD)
+	_px(img, 18, 18, P.GOLD)
+	# medio aro runico: al cerrarse, las dos hojas dibujan un circulo
+	var centro := Vector2(24.0, 74.0)
+	for y in range(62, 87):
+		for x in range(15, 24):
+			var d := Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(centro)
+			if d > 8.5 and d <= 10.0:
+				_px(img, x, y, P.GOLD)
+	for i in range(3):
+		_px(img, 20 + i, 74, P.GOLD)
+		_px(img, 21, 71 + i, P.GOLD)
+		_px(img, 21, 77 - i, P.GOLD)
+	return ImageTexture.create_from_image(img)
+
+
+# =====================================================================
 #  Particulas
 # =====================================================================
 func glow_texture() -> ImageTexture:
