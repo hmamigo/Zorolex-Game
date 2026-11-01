@@ -754,6 +754,7 @@ func cargar_nivel(nuevo_nivel: RefCounted) -> void:
 	if camera != null:
 		camera.global_position = player.global_position + Vector2(0.0, -78.0)
 	_update_parallax()
+	_actualizar_contador()
 
 
 # =====================================================================
@@ -1003,10 +1004,11 @@ func _build_progress(layer: CanvasLayer) -> void:
 
 
 func _actualizar_contador() -> void:
-	if _saberes_label == null or _db == null:
+	if _saberes_label == null or _db == null or _nivel == null:
 		return
+	var zona := str(_nivel.ZONE_ID)
 	_saberes_label.text = tr("SABERES_CONTADOR") % [
-		_db.cantidad_recogidos(), _db.total()]
+		_db.cantidad_recogidos(zona), _db.total(zona)]
 
 
 ## Mensaje breve arriba de la pantalla (saber encontrado, puerta cerrada).
