@@ -9,6 +9,7 @@ extends SceneTree
 ## escribe su propio set y no regenera los del otro.
 
 const OUT := "res://out"
+const W = preload("res://scripts/world_3d.gd")
 
 var frame := 0
 var main: Node
@@ -31,12 +32,12 @@ func _initialize() -> void:
 func _process(_delta: float) -> bool:
 	frame += 1
 	if frame == 320:
-		main.player.global_position = Vector2(120.0, 0.0)
+		_teleport(120.0, 0.0)
 	if frame == 410:
-		main.player.global_position = Vector2(700.0, 0.0)
+		_teleport(700.0, 0.0)
 	if frame == 500:
-		main.player.global_position = Vector2(760.0, -190.0)
-		main.player.velocity = Vector2.ZERO
+		_teleport(760.0, -190.0)
+		main.player.velocity = Vector3.ZERO
 	if frame == 560:
 		Input.action_press("ui_right")
 		Input.action_press("ui_accept")
@@ -49,3 +50,9 @@ func _process(_delta: float) -> bool:
 	if frame > 640:
 		return true
 	return false
+
+
+## Lleva al zorro a un punto de diseño 2D (x, y con +y hacia abajo).
+func _teleport(x: float, y: float) -> void:
+	main.player.global_position = W.to_world(Vector2(x, y))
+	main.player.velocity = Vector3.ZERO

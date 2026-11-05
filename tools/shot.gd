@@ -1,6 +1,7 @@
 extends SceneTree
 ## Captura el juego en varias posiciones. Uso (con display virtual):
 ##   xvfb-run -a godot --path . --rendering-driver opengl3 --script res://tools/shot.gd -- NOMBRE
+const W = preload("res://scripts/world_3d.gd")
 var _frame := 0
 var _main: Node
 var _stops := [[-560.0, "a"], [-120.0, "b"], [560.0, "c"], [800.0, "d"]]
@@ -22,9 +23,9 @@ func _process(_delta: float) -> bool:
 			_save(_stops[_i - 1][1])
 		if _i >= _stops.size():
 			return true
-		var p: Node2D = _main.player
-		p.global_position = Vector2(_stops[_i][0], -2.0)
-		p.velocity = Vector2.ZERO
+		var p: Node3D = _main.player
+		p.global_position = W.to_world(Vector2(_stops[_i][0], -2.0))
+		p.velocity = Vector3.ZERO
 		p.set("respawn_position", p.global_position)
 		print("set ", _i, " -> ", p.global_position, " frame ", _frame)
 		_i += 1

@@ -8,6 +8,7 @@ extends SceneTree
 ## Los prints "d=true" confirman que el hongo quedo aplastado.
 
 const OUT := "res://out"
+const W = preload("res://scripts/world_3d.gd")
 
 var frame := 0
 var main: Node
@@ -23,16 +24,15 @@ func _initialize() -> void:
 func _process(_delta: float) -> bool:
 	frame += 1
 	if frame == 10:
-		main.player.global_position = Vector2(-500.0, 0.0)
+		_teleport(-500.0, 0.0)
 	if frame == 200:
 		Input.action_press("ui_right")
 	if frame == 240:
 		root.get_texture().get_image().save_png("%s/06_run.png" % OUT)
 	if frame == 245:
 		Input.action_release("ui_right")
-		main.player.global_position = Vector2(-100.0, 0.0)
-		main.player.velocity = Vector2.ZERO
-		for c in main.get_children():
+		_teleport(-100.0, 0.0)
+		for c in main.mundo.get_children():
 			if c.name == "Hongo" and target == null:
 				target = c
 		if target != null:
@@ -42,8 +42,8 @@ func _process(_delta: float) -> bool:
 			print("target ", target.global_position, " invuln? ", main.player.get("_invuln"))
 	if frame == 255:
 		if target != null:
-			main.player.global_position = target.global_position + Vector2(0.0, -64.0)
-			main.player.velocity = Vector2(0.0, 60.0)
+			main.player.global_position = target.global_position + Vector3(0.0, 64.0, 0.0)
+			main.player.velocity = Vector3(0.0, -60.0, 0.0)
 			print("teleport to ", main.player.global_position, " target ", target.global_position)
 	if frame >= 255 and frame <= 290 and frame % 3 == 0:
 		print(frame, " p=", main.player.global_position, " v=", main.player.velocity,
@@ -55,3 +55,9 @@ func _process(_delta: float) -> bool:
 	if frame > 315:
 		return true
 	return false
+
+
+## Lleva al zorro a un punto de diseño 2D (x, y con +y hacia abajo).
+func _teleport(x: float, y: float) -> void:
+	main.player.global_position = W.to_world(Vector2(x, y))
+	main.player.velocity = Vector3.ZERO

@@ -32,8 +32,7 @@ func _process(_delta: float) -> bool:
 
 func _grab() -> void:
 	var img := root.get_texture().get_image()
-	var cam: Camera2D = _main.camera
-	var feet: Vector2 = (_main.player.global_position - cam.global_position) * cam.zoom + Vector2(root.size) * 0.5
+	var feet := _main.camera.unproject_position(_main.player.global_position)
 	_crops.append(img.get_region(Rect2i(int(feet.x) - 50, int(feet.y) - 92, 100, 100)))
 
 func _finish() -> void:

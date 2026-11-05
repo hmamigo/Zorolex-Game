@@ -10,9 +10,10 @@ extends SceneTree
 
 const OUT := "res://out"
 const CROP := Vector2i(240, 240)
-## la camara mira 78 unidades por encima del jugador, asi que sus pies quedan
-## bastante por debajo del centro de pantalla: por eso el offset vertical es chico
+## la camara apunta al centro del sprite, asi que los pies quedan un poco por
+## debajo del centro de pantalla: por eso el offset vertical es chico
 const CROP_OFFSET := Vector2i(120, 150)
+const W = preload("res://scripts/world_3d.gd")
 
 var frame := 0
 var main: Node
@@ -27,7 +28,7 @@ func _initialize() -> void:
 func _process(_delta: float) -> bool:
 	frame += 1
 	if frame == 10:
-		main.player.global_position = Vector2(-140.0, 0.0)
+		main.player.global_position = W.to_world(Vector2(-140.0, 0.0))
 	if frame == 120:
 		Input.action_press("ui_right")
 	if frame >= 150 and frame <= 204 and frame % 6 == 0:
@@ -41,12 +42,9 @@ func _process(_delta: float) -> bool:
 
 func _save_around_player(index: int) -> void:
 	var img := root.get_texture().get_image()
-	# pantalla = centro + (mundo - camara) * zoom; no depende del canvas transform
-	var cam: Camera2D = main.camera
-	var zoom: Vector2 = cam.zoom
-	var center := Vector2(img.get_size()) * 0.5
-	var world_pos: Vector2 = main.player.global_position
-	var screen_pos := center + (world_pos - cam.global_position) * zoom
+	# pantalla = proyeccion 3D de los pies del zorro
+	var cam: Camera3D = main.camera
+	var screen_pos := cam.unproject_position(main.player.global_position)
 	var origin := Vector2i(screen_pos) - CROP_OFFSET
 	# se mantiene dentro del cuadro para que todos los frames midan igual
 	origin.x = clampi(origin.x, 0, img.get_width() - CROP.x)

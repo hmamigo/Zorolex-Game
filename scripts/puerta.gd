@@ -1,13 +1,19 @@
-extends StaticBody2D
+extends StaticBody3D
 ## Puerta de piedra del bosque. Se abre sola cuando el zorro reunio todos los
 ## saberes que pide; si le falta alguno, avisa cuales son.
+##
+## El cuerpo es una caja 3D que bloquea el paso por el plano de juego y los
+## dibujos son billboards 2D, igual que el resto del mundo 2.5D.
 
 const ART = preload("res://scripts/pixel_art.gd")
 const P = preload("res://scripts/palette.gd")
+const W = preload("res://scripts/world_3d.gd")
 
 const ANCHO := 46.0
 const ALTO := 148.0
 const AVISO_CADA := 4.0
+## Profundidad de la caja de colisión (deja pasar al zorro por delante).
+const PROFUNDIDAD := 24.0
 
 ## Los setea main.gd desde level_data.gd antes de agregar el nodo.
 var puerta_id := ""
@@ -17,17 +23,17 @@ var requires: Array = []
 var pregunta_de := ""
 
 var _abierta := false
-var _jugador: Node2D
+var _jugador: Node3D
 var _viajando := false
 var _aviso := 0.0
 var _espera := 0.0
 var _preguntando := false
 var _bloqueada := false
 var _db: Node
-var _glow: Sprite2D
-var _hojas: Array[Sprite2D] = []
-var _col: CollisionShape2D
-var _area: Area2D
+var _glow: Sprite3D
+var _hojas: Array[Sprite3D] = []
+var _col: CollisionShape3D
+var _area: Area3D
 
 
 func _ready() -> void:
@@ -36,54 +42,65 @@ func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 0
 
-	_col = CollisionShape2D.new()
-	var caja := RectangleShape2D.new()
-	caja.size = Vector2(ANCHO, ALTO)
+	_col = CollisionShape3D.new()
+	var caja := BoxShape3D.new()
+	caja.size = Vector3(ANCHO, ALTO, PROFUNDIDAD)
 	_col.shape = caja
-	_col.position = Vector2(0.0, -ALTO * 0.5)
+	_col.position = Vector3(0.0, ALTO * 0.5, 0.0)
 	add_child(_col)
 
 	var art := ART.new()
 
-	_glow = Sprite2D.new()
+	_glow = Sprite3D.new()
 	_glow.name = "Luz"
 	_glow.texture = art.glow_texture()
-	_glow.position = Vector2(0.0, -68.0)
-	_glow.scale = Vector2(7.0, 7.0)
+	_glow.pixel_size = 1.0
+	_glow.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_glow.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	_glow.transparent = true
+	_glow.shaded = false
+	_glow.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	_glow.position = Vector3(0.0, 68.0, 0.3)
+	_glow.scale = Vector3(7.0, 7.0, 1.0)
 	_glow.modulate = Color(P.GOLD.r, P.GOLD.g, P.GOLD.b, 0.12)
-	_glow.z_index = -1
-	var brillo := CanvasItemMaterial.new()
-	brillo.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_glow.material = brillo
+	_glow.material_override = W.additive_material(art.glow_texture(), Color.WHITE, true)
 	add_child(_glow)
 
-	var marco := Sprite2D.new()
+	var marco := Sprite3D.new()
 	marco.name = "Marco"
 	marco.texture = art.door_frame()
-	marco.position = Vector2(0.0, -80.0)
-	marco.z_index = 2
+	marco.pixel_size = 1.0
+	marco.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marco.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	marco.shaded = false
+	marco.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	marco.position = Vector3(0.0, 80.0, 0.6)
 	add_child(marco)
 
 	var textura := art.door_leaf()
 	for lado in [-1.0, 1.0]:
-		var hoja := Sprite2D.new()
+		var hoja := Sprite3D.new()
 		hoja.name = "HojaIzq" if lado < 0.0 else "HojaDer"
 		hoja.texture = textura
+		hoja.pixel_size = 1.0
+		hoja.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		hoja.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		hoja.shaded = false
+		hoja.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 		hoja.flip_h = lado > 0.0
-		hoja.position = Vector2(12.0 * lado, -72.0)
-		hoja.z_index = 1
+		hoja.position = Vector3(12.0 * lado, 72.0, 0.7)
 		add_child(hoja)
 		_hojas.append(hoja)
 
-	_area = Area2D.new()
+	_area = Area3D.new()
 	_area.name = "Aviso"
 	_area.collision_layer = 0
 	_area.collision_mask = 1
-	var alcance := CollisionShape2D.new()
-	var circulo := CircleShape2D.new()
-	circulo.radius = 92.0
-	alcance.shape = circulo
-	alcance.position = Vector2(0.0, -40.0)
+	var alcance := CollisionShape3D.new()
+	var esfera := SphereShape3D.new()
+	esfera.radius = 92.0
+	alcance.shape = esfera
+	alcance.position = Vector3(0.0, 40.0, 0.0)
 	_area.add_child(alcance)
 	add_child(_area)
 	_area.body_entered.connect(_on_body_entered)
@@ -113,7 +130,7 @@ func _process(delta: float) -> void:
 		_pedir_saber()
 
 
-func _on_body_entered(body: Node2D) -> void:
+func _on_body_entered(body: Node3D) -> void:
 	if not body.is_in_group("player"):
 		return
 	# Puerta ya abierta (por ejemplo, guardada de una partida anterior): al
@@ -134,7 +151,7 @@ func _on_body_entered(body: Node2D) -> void:
 	_bloqueada = false
 
 
-func _on_body_exited(body: Node2D) -> void:
+func _on_body_exited(body: Node3D) -> void:
 	if body == _jugador:
 		_jugador = null
 
@@ -236,7 +253,7 @@ func abrir(instantanea := false) -> void:
 
 	if instantanea:
 		for hoja in _hojas:
-			hoja.position.y = 78.0
+			hoja.position.y = -78.0
 			hoja.modulate.a = 0.25
 		_glow.modulate.a = 0.55
 		return
@@ -247,30 +264,30 @@ func abrir(instantanea := false) -> void:
 	var t := create_tween()
 	t.set_parallel(true)
 	for hoja in _hojas:
-		t.tween_property(hoja, "position:y", 78.0, 1.1) \
+		t.tween_property(hoja, "position:y", -78.0, 1.1) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		t.tween_property(hoja, "modulate:a", 0.25, 1.1)
 	t.tween_property(_glow, "modulate:a", 0.55, 1.3).set_ease(Tween.EASE_OUT)
 
 	var art := ART.new()
-	var polvo := CPUParticles2D.new()
+	var polvo := CPUParticles3D.new()
 	polvo.one_shot = true
 	polvo.emitting = true
 	polvo.amount = 22
 	polvo.lifetime = 0.9
 	polvo.explosiveness = 0.92
 	polvo.local_coords = false
-	polvo.texture = art.puff_texture()
+	polvo.mesh = W.particle_mesh(6.0)
+	polvo.material_override = W.particle_material(art.puff_texture(), false)
 	polvo.color = Color(P.STONE_L.r, P.STONE_L.g, P.STONE_L.b, 0.85)
-	polvo.direction = Vector2(0.0, -1.0)
+	polvo.direction = Vector3(0.0, 1.0, 0.0)
 	polvo.spread = 70.0
 	polvo.initial_velocity_min = 20.0
 	polvo.initial_velocity_max = 70.0
-	polvo.gravity = Vector2(0.0, 140.0)
+	polvo.gravity = Vector3(0.0, -140.0, 0.0)
 	polvo.scale_amount_min = 0.5
 	polvo.scale_amount_max = 1.1
-	polvo.position = Vector2(0.0, -6.0)
-	polvo.z_index = 3
+	polvo.position = Vector3(0.0, 6.0, 0.0)
 	add_child(polvo)
 
 	var juego := _juego()

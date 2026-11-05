@@ -1,9 +1,10 @@
 # Zorolex Game — La colección del saber
 
-Godot 4.7.2 / GDScript. Plataformas 2D. Un zorro explora zonas (bosques, ruinas,
-cuevas, montañas) y recolecta **saberes**: resúmenes breves, con fuentes, de entradas
-de Wikipedia. Cada saber esconde un dato que sirve para abrir puertas y desbloquear
-otras zonas. El tono es tranquilo y contemplativo: explorar y aprender, no apurarse.
+Godot 4.7.2 / GDScript. Plataformas 2.5D: mundo 3D con cámara inclinada y sprites 2D
+en billboard. Un zorro explora zonas (bosques, ruinas, cuevas, montañas) y recolecta
+**saberes**: resúmenes breves, con fuentes, de entradas de Wikipedia. Cada saber
+esconde un dato que sirve para abrir puertas y desbloquear otras zonas. El tono es
+tranquilo y contemplativo: explorar y aprender, no apurarse.
 
 El estilo visual base sigue siendo **arte procedural** (sprites ASCII, paleta única).
 
@@ -25,6 +26,21 @@ El estilo visual base sigue siendo **arte procedural** (sprites ASCII, paleta ú
     sin avisar: es una decisión de estilo.
 - **No edites `.godot/` ni `addons/godot_ai/`.** Son caché y plugin del MCP.
 - **No inventes datos ni fuentes.** Ver "Saberes".
+
+## Mundo 2.5D
+
+El juego se diseña en 2D pero se construye en 3D: suelos y repisas son cajas, la
+cámara está inclinada y todo lo dibujado son sprites 2D en billboard. Las
+convenciones viven en `scripts/world_3d.gd`:
+
+- `PLANE_Z` es el plano de juego y cae en el **centro de la tapa del terreno**.
+  El zorro, los hongos, los saberes y las puertas viven ahí; los props decorativos
+  van detrás (`PROP_Z`) para no tapar al zorro.
+- La lógica sigue en coordenadas de diseño 2D y se convierte con `W.to_world()` /
+  `W.to_side()`.
+- La cámara (`CAM_DISTANCE`, `CAM_FOV`, `CAM_PITCH`, `CAM_YAW`) apunta al centro
+  del sprite del zorro. Si movés `PLANE_Z`, revisá la sombra del zorro, el rayo de
+  borde del hongo y la compensación de escala del parallax.
 
 ## Saberes
 
@@ -159,6 +175,7 @@ mismo archivo; las fuentes no se traducen.
 |---|---|
 | `scripts/palette.gd` | Única fuente de color + `LEGEND` de los mapas ASCII |
 | `scripts/sprite_data.gd` | Frames ASCII del zorro y del hongo |
+| `scripts/world_3d.gd` | Convenciones del mundo 2.5D: plano de juego, profundidad de plataformas, cámara y conversión 2D↔3D |
 | `scripts/level_data.gd` | Nivel 1 (Bosque de Bruma): spawn, límites de cámara, suelos, repisas, props, hongos, saberes y puertas |
 | `scripts/level_ruinas.gd` | Nivel 2 (Ruinas): mismo formato que `level_data.gd` |
 | `scripts/pixel_art.gd` | Genera texturas: sprites, terreno, bosque, sol, niebla, hojas de saber y puertas |

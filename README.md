@@ -1,6 +1,6 @@
 # Zorolex — La colección del saber
 
-Un juego de plataformas 2D, tranquilo y contemplativo, hecho con Godot.
+Un juego de plataformas 2.5D, tranquilo y contemplativo, hecho con Godot.
 
 Eres un zorro que recorre bosques, ruinas, cuevas y montañas buscando **saberes**:
 pequeños textos coleccionables basados en entradas reales de Wikipedia, con sus
@@ -14,8 +14,9 @@ nuevos lugares. Explorar, leer y recordar forman parte del juego.
 
 ## Características
 
-- **Plataformas 2D** con movimiento pensado para sentirse bien: coyote time, squash &
-  stretch, polvo y sombra.
+- **Plataformas 2.5D**: el mundo se construye en 3D con cámara inclinada y sprites 2D,
+  y el movimiento está pensado para sentirse bien: coyote time, squash & stretch,
+  polvo y sombra.
 - **Arte procedural**: los sprites se escriben como mapas ASCII y las texturas del
   terreno, el bosque, el sol y la niebla se generan en tiempo de ejecución a partir de
   una única paleta de colores.

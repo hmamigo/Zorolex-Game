@@ -4,11 +4,12 @@ extends SceneTree
 ## Uso:
 ##   godot --path . --script tools/capture_saberes.gd --rendering-driver opengl3 --audio-driver Dummy
 ##
-## Salida: out/09_saber_flotante.png ... out/15_diario_completo.png
+## Salida: out/09_saber_flotante.png ... out/17_diario_completo.png
 ## Arranca sin guardado previo para que las hojas esten todas en el nivel y la
 ## puerta cerrada. Los hongos se sacan para que el recorrido sea reproducible.
 
 const OUT := "res://out"
+const W = preload("res://scripts/world_3d.gd")
 const RUTA_GUARDADO := "user://savegame.json"
 
 var frame := 0
@@ -29,13 +30,16 @@ func _initialize() -> void:
 	main = load("res://scenes/Main.tscn").instantiate()
 	root.add_child(main)
 
-	for hijo in main.get_children():
-		if hijo.name.begins_with("Hongo"):
-			hijo.queue_free()
-
 
 func _process(_delta: float) -> bool:
 	frame += 1
+
+	# Los hongos se sacan en el primer frame: al agregar la escena en
+	# _initialize, main todavía no construyó su mundo (mundo == null).
+	if frame == 5:
+		for hijo in main.mundo.get_children():
+			if hijo.name.begins_with("Hongo"):
+				hijo.queue_free()
 
 	# La hoja flotante, sin tocar.
 	if frame == 330:
@@ -45,7 +49,7 @@ func _process(_delta: float) -> bool:
 
 	# Primera recogida y diario con un solo saber.
 	if frame == 400:
-		_teleport(-700.0, 0.0)
+		_teleport(-700.0, 0.0)     # micorrizas
 	if frame == 440:
 		_captura("10_saber_recogido")
 	if frame == 470:
@@ -57,61 +61,57 @@ func _process(_delta: float) -> bool:
 	if frame == 530:
 		main.diario.cerrar()
 
-	# Cuatro saberes mas: la puerta sigue cerrada y pide el que falta.
+	# Dos saberes mas: la puerta sigue cerrada y pide el que falta.
 	if frame == 560:
-		_teleport(240.0, 0.0)      # luz_de_luciernaga
-	if frame == 590:
 		_teleport(-90.0, -96.0)    # niebla
-	if frame == 620:
+	if frame == 590:
 		_teleport(520.0, 0.0)      # helechos
-	if frame == 650:
-		_teleport(110.0, -180.0)   # anillo_de_hadas
-	if frame == 680:
+	if frame == 620:
 		print("recogidos con la puerta cerrada: ", _db().cantidad_recogidos(), "/", _db().total())
-	if frame == 700:
-		_teleport(1000.0, 0.0)
+	if frame == 640:
+		_teleport(1650.0, 0.0)
 		Input.action_press("ui_right")
-	if frame == 740:
+	if frame == 700:
 		Input.action_release("ui_right")
 		print("frena en la puerta: x=", main.player.global_position.x)
-	if frame == 760:
+	if frame == 720:
 		_captura("12_puerta_cerrada")
 
 	# Sale del alcance de la puerta antes del ultimo saber: asi la puerta no se
 	# abre lejos del zorro, sino cuando vuelve.
-	if frame == 775:
-		_teleport(930.0, 0.0)
+	if frame == 735:
+		_teleport(1650.0, 0.0)
 
 	# Ultimo saber: al volver a la puerta se abre la pregunta, no la puerta.
-	if frame == 800:
-		_teleport(900.0, -250.0)   # musgo
-	if frame == 830:
+	if frame == 760:
+		_teleport(1600.0, 0.0)     # luz_de_luciernaga
+	if frame == 790:
 		print("recogidos al final: ", _db().cantidad_recogidos(), "/", _db().total())
-	if frame == 850:
-		_teleport(1000.0, 0.0)
-	if frame == 860:
+	if frame == 810:
+		_teleport(1750.0, 0.0)
+	if frame == 830:
 		print("pregunta visible: ", main.pregunta.visible, "  pausa: ", paused)
-	if frame == 890:
+	if frame == 860:
 		_captura("13_puerta_pregunta")
-	if frame == 900:
+	if frame == 880:
 		_responder_mal()
-	if frame == 920:
+	if frame == 900:
 		_captura("14_pregunta_error")
-	if frame == 935:
+	if frame == 915:
 		main.pregunta.elegir(main.pregunta._correcta)
-	if frame == 975:
+	if frame == 955:
 		_captura("15_puerta_abriendo")
-	if frame == 1045:
+	if frame == 1025:
 		_captura("16_puerta_abierta")
-	if frame == 1065:
+	if frame == 1045:
 		print("puerta abierta: ", _db().esta_abierta("puerta_ruinas_01"))
-	if frame == 1075:
+	if frame == 1055:
 		_pulsar_tecla(KEY_J)
-	if frame == 1115:
+	if frame == 1095:
 		_captura("17_diario_completo")
-	if frame == 1135:
+	if frame == 1115:
 		main.diario.cerrar()
-	if frame > 1165:
+	if frame > 1145:
 		return true
 	return false
 
@@ -126,9 +126,10 @@ func _db() -> Node:
 	return root.get_node_or_null("Saberes")
 
 
+## Lleva al zorro a un punto de diseño 2D (x, y con +y hacia abajo).
 func _teleport(x: float, y: float) -> void:
-	main.player.global_position = Vector2(x, y)
-	main.player.velocity = Vector2.ZERO
+	main.player.global_position = W.to_world(Vector2(x, y))
+	main.player.velocity = Vector3.ZERO
 
 
 func _pulsar_tecla(codigo: Key) -> void:

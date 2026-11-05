@@ -1,8 +1,14 @@
-extends Node2D
-## Bosque de Bruma — mundo, camara, parallax, ambiente y HUD.
+extends Node3D
+## Zorolex — mundo 2.5D: escenario 3D, cámara lateral y sprites 2D.
+##
+## El nivel se sigue definiendo en los archivos de zona con coordenadas 2D
+## (ver scripts/world_3d.gd). Acá se construye el mundo 3D: cajas de terreno,
+## props, saberes, puertas, partículas y una cámara con inclinación leve.
+## El zorro y los enemigos son billboards 2D dentro de ese mundo.
 
 const P = preload("res://scripts/palette.gd")
 const ART = preload("res://scripts/pixel_art.gd")
+const W = preload("res://scripts/world_3d.gd")
 const LEVEL_BOSQUE = preload("res://scripts/level_data.gd")
 const LEVEL_RUINAS = preload("res://scripts/level_ruinas.gd")
 const PLAYER_SCRIPT = preload("res://scripts/player.gd")
@@ -11,19 +17,16 @@ const PUERTA = preload("res://scripts/puerta.gd")
 const DIARIO = preload("res://scripts/diario.gd")
 const PREGUNTA = preload("res://scripts/pregunta.gd")
 
-## Nivel de zona actualmente cargado (datos de geometria, saberes, puertas).
+## Nivel de zona actualmente cargado (datos de geometría, saberes, puertas).
 var _nivel
 ## Contenedor de todo lo que pertenece al mundo de la zona (plataformas,
-## decoracion, saberes, puertas, enemigos, parallax). Se reemplaza al cambiar
-## de zona, sin tocar al jugador, la camara ni la UI.
-var mundo: Node2D
-
-## Suaviza las capas lejanas (bosque, copas, sol). false = pixeles duros como antes.
-const BG_SMOOTH := true
+## decoración, saberes, puertas, enemigos, partículas). Se reemplaza al cambiar
+## de zona, sin tocar al jugador, la cámara ni la UI.
+var mundo: Node3D
 
 var art: ART
-var player: CharacterBody2D
-var camera: Camera2D
+var player: CharacterBody3D
+var camera: Camera3D
 var diario: CanvasLayer
 var pregunta: CanvasLayer
 var _db: Node
@@ -37,6 +40,8 @@ var _saberes_label: Label
 var _aviso: Label
 var _aviso_tween: Tween
 var _pausas := 0
+## Punto al que mira la cámara. También manda el parallax del fondo.
+var _cam_target := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -50,11 +55,11 @@ func _ready() -> void:
 	# Nivel inicial: Bosque de Bruma.
 	_nivel = LEVEL_BOSQUE
 
-	mundo = Node2D.new()
+	mundo = Node3D.new()
 	mundo.name = "Mundo"
 	add_child(mundo)
 
-	_build_sky()
+	_build_environment()
 	_build_parallax()
 	_build_screen_frame()
 	_build_world()
@@ -74,20 +79,54 @@ func _ready() -> void:
 
 
 # =====================================================================
-#  Cielo y capas de bosque
+#  Ambiente 3D: entorno, luz y cielo
 # =====================================================================
-func _build_sky() -> void:
-	var layer := CanvasLayer.new()
-	layer.layer = -100
-	add_child(layer)
+func _build_environment() -> void:
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = P.SKY_TOP
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = P.FOG
+	env.ambient_light_energy = 0.62
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.0
+	# Niebla por profundidad: el plano de juego queda limpio y el fondo se
+	# disuelve en la bruma dorada.
+	env.fog_enabled = true
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_depth_begin = 640.0
+	env.fog_depth_end = 1800.0
+	env.fog_depth_curve = 1.0
+	env.fog_light_color = P.FOG
+	env.fog_light_energy = 0.5
+	env.fog_sky_affect = 0.0
+	var we := WorldEnvironment.new()
+	we.name = "Entorno"
+	we.environment = env
+	add_child(we)
 
-	var sky := ColorRect.new()
-	sky.set_anchors_preset(Control.PRESET_FULL_RECT)
-	sky.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sol := DirectionalLight3D.new()
+	sol.name = "Sol"
+	sol.light_color = P.SUN
+	sol.light_energy = 1.05
+	sol.rotation_degrees = Vector3(-48.0, -38.0, 0.0)
+	sol.shadow_enabled = true
+	sol.directional_shadow_max_distance = 900.0
+	add_child(sol)
+
+
+## Cielo dibujado en un quad pegado a la cámara: conserva el degradado del
+## juego 2D y queda siempre detrás de todas las capas 3D.
+func _build_sky_quad() -> void:
+	if camera == null:
+		return
+	var quad := QuadMesh.new()
+	quad.size = Vector2(2600.0, 1500.0)
 	var mat := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """
-shader_type canvas_item;
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, fog_disabled, shadows_disabled;
 uniform vec4 top_color : source_color = vec4(0.17, 0.29, 0.27, 1.0);
 uniform vec4 mid_color : source_color = vec4(0.43, 0.55, 0.48, 1.0);
 uniform vec4 low_color : source_color = vec4(0.86, 0.75, 0.55, 1.0);
@@ -98,17 +137,15 @@ void fragment() {
 	vec3 c = mix(top_color.rgb, mid_color.rgb, smoothstep(0.0, 0.50, uv.y));
 	float glow = smoothstep(0.32, 0.63, uv.y) * (1.0 - smoothstep(0.70, 0.96, uv.y));
 	c = mix(c, low_color.rgb, glow * 0.94);
-	// la calidez crece hacia el lado del sol
 	float side = smoothstep(0.10, 0.95, uv.x);
 	c = mix(c, warm_color.rgb, glow * side * 0.42);
 	c = mix(c, deep_color.rgb, smoothstep(0.85, 1.02, uv.y));
-	// nubes largas y suaves, encendidas por el sol
 	float cloud = sin(uv.y * 30.0 + sin(uv.x * 5.0) * 2.2) * 0.5 + 0.5;
 	cloud *= smoothstep(0.16, 0.40, uv.y) * (1.0 - smoothstep(0.60, 0.84, uv.y));
 	c += cloud * 0.030 * warm_color.rgb;
 	float band = sin(uv.y * 24.0 + sin(uv.x * 6.0) * 1.5) * 0.008;
 	c += band;
-	COLOR = vec4(c, 1.0);
+	ALBEDO = c;
 }
 """
 	mat.shader = shader
@@ -117,93 +154,120 @@ void fragment() {
 	mat.set_shader_parameter("low_color", P.SKY_HORIZON)
 	mat.set_shader_parameter("warm_color", P.SUN)
 	mat.set_shader_parameter("deep_color", P.FOREST_FRONT)
-	sky.material = mat
-	layer.add_child(sky)
+	var mi := MeshInstance3D.new()
+	mi.name = "Cielo"
+	mi.mesh = quad
+	mi.material_override = mat
+	mi.position = Vector3(0.0, 0.0, -W.SKY_DISTANCE)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	camera.add_child(mi)
 
+
+# =====================================================================
+#  Capas de bosque en profundidad
+# =====================================================================
 func _build_parallax() -> void:
 	# sol bajo entre la niebla
-	_single_layer(art.sun_glow(), Vector2(0.02, 0.01), Vector2(190.0, -62.0), -91, 3.1,
+	_single_layer(art.sun_glow(), Vector2(0.02, 0.01), Vector2(190.0, -62.0), -900.0, 3.1,
 		Color(1.0, 0.78, 0.44, 0.30), true)
-	_single_layer(art.sun_disk(), Vector2(0.02, 0.01), Vector2(190.0, -56.0), -90, 1.55,
+	_single_layer(art.sun_disk(), Vector2(0.02, 0.01), Vector2(190.0, -56.0), -890.0, 1.55,
 		Color(1.0, 1.0, 1.0, 0.95), false)
 
-	_tiled_layer(art.far_forest(11), Vector2(0.10, 0.02), Vector2(0.0, -170.0), -92, 5, 2.0,
+	_tiled_layer(art.far_forest(11), Vector2(0.10, 0.02), Vector2(0.0, -170.0), -600.0, 5, 2.0,
 		Color(1.0, 1.0, 1.0, 0.85))
-	# valle de fondo: rellena la parte baja cuando la camara sube
-	_tiled_layer(art.valley_forest(59), Vector2(0.07, 0.03), Vector2(0.0, -60.0), -80, 5, 2.0,
+	# valle de fondo: rellena la parte baja cuando la cámara sube
+	_tiled_layer(art.valley_forest(59), Vector2(0.07, 0.03), Vector2(0.0, -60.0), -500.0, 5, 2.0,
 		Color(0.94, 0.98, 0.94, 1.0))
-	_tiled_layer(art.mid_forest(23), Vector2(0.19, 0.04), Vector2(0.0, -178.0), -84, 5, 2.0,
+	_tiled_layer(art.mid_forest(23), Vector2(0.19, 0.04), Vector2(0.0, -178.0), -350.0, 5, 2.0,
 		Color(1.0, 1.0, 1.0, 1.0))
 	# haces de luz que caen entre las copas
-	_single_layer(art.light_shafts(151), Vector2(0.03, 0.02), Vector2(90.0, -150.0), -81, 2.0,
+	_single_layer(art.light_shafts(151), Vector2(0.03, 0.02), Vector2(90.0, -150.0), -300.0, 2.0,
 		Color(1.0, 0.86, 0.58, 0.9), true)
-	_tiled_layer(art.near_forest(37), Vector2(0.33, 1.0), Vector2(0.0, -283.0), -64, 5, 2.0,
+	_tiled_layer(art.near_forest(37), Vector2(0.33, 1.0), Vector2(0.0, -283.0), -200.0, 5, 2.0,
 		Color(0.94, 0.98, 0.94, 1.0))
 
 	# copas que enmarcan la parte superior
-	_tiled_layer(art.canopy_layer(71), Vector2(0.55, 0.06), Vector2(0.0, -100.0), -58, 5, 2.0,
+	_tiled_layer(art.canopy_layer(71), Vector2(0.55, 0.06), Vector2(0.0, -100.0), -150.0, 5, 2.0,
 		Color(1.0, 1.0, 1.0, 1.0))
 
-	# barranco oscuro detras de los huecos del suelo
-	var pit := Sprite2D.new()
+	# barranco oscuro detrás de los huecos del suelo
+	var pit := Sprite3D.new()
 	pit.texture = art.pit_texture()
-	pit.centered = false
-	pit.position = Vector2(-900.0, 0.0)
-	pit.scale = Vector2(300.0, 1.15)
-	pit.z_index = -30
+	pit.pixel_size = 1.0
+	pit.centered = true
+	pit.scale = Vector3(300.0, 1.15, 1.0)
+	pit.position = Vector3(-900.0 + 4.0 * 300.0, -100.0 * 1.15, -130.0)
+	pit.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	pit.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	pit.transparent = true
+	pit.shaded = false
 	add_child(pit)
 
 
-
-func _single_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, scale: float,
+func _single_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: float, scale: float,
 		modulate: Color, additive := false) -> void:
-	var node := Node2D.new()
-	node.z_index = z
-	var s := Sprite2D.new()
+	var node := Node3D.new()
+	node.position = Vector3(base.x, -base.y, z)
+	add_child(node)
+
+	var s := Sprite3D.new()
 	s.texture = tex
+	s.pixel_size = 1.0
 	s.centered = true
-	s.scale = Vector2(scale, scale)
-	s.position = Vector2.ZERO
-	s.modulate = modulate
-	if BG_SMOOTH:
-		s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	# Compensa la perspectiva para que la capa se vea del tamaño diseñado,
+	# medida desde el plano de juego (no desde la cara frontal del terreno).
+	var depth_scale := (W.CAM_DISTANCE + W.PLANE_Z - z) / W.CAM_DISTANCE
+	s.scale = Vector3.ONE * scale * depth_scale
+	s.position = Vector3.ZERO
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR if W.BG_SMOOTH \
+		else BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	s.transparent = true
+	s.shaded = false
 	if additive:
-		var m := CanvasItemMaterial.new()
-		m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-		s.material = m
-	node.add_child(s)
-	add_child(node)
-	_layers.append({"node": node, "factor": factor, "base": base})
-
-
-func _tiled_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: int, tiles: int,
-		scale: float, modulate: Color) -> void:
-	var node := Node2D.new()
-	node.z_index = z
-	var tw := float(tex.get_width()) * scale
-	for i in range(tiles):
-		var s := Sprite2D.new()
-		s.texture = tex
-		s.centered = true
-		s.scale = Vector2(scale, scale)
-		s.position = Vector2((float(i) - float(tiles) * 0.5) * tw, 0.0)
+		s.material_override = W.additive_material(tex, modulate)
+	else:
 		s.modulate = modulate
-		if BG_SMOOTH:
-			s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-		node.add_child(s)
+	node.add_child(s)
+	_layers.append({"node": node, "factor": factor, "base": node.position})
+
+
+func _tiled_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: float, tiles: int,
+		scale: float, modulate: Color) -> void:
+	var node := Node3D.new()
+	node.position = Vector3(base.x, -base.y, z)
 	add_child(node)
-	_layers.append({"node": node, "factor": factor, "base": base})
+
+	var depth_scale := (W.CAM_DISTANCE + W.PLANE_Z - z) / W.CAM_DISTANCE
+	var scl := scale * depth_scale
+	var tw := float(tex.get_width()) * scl
+	for i in range(tiles):
+		var s := Sprite3D.new()
+		s.texture = tex
+		s.pixel_size = 1.0
+		s.centered = true
+		s.scale = Vector3.ONE * scl
+		s.position = Vector3((float(i) - float(tiles) * 0.5) * tw, 0.0, 0.0)
+		s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR if W.BG_SMOOTH \
+			else BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+		s.transparent = true
+		s.shaded = false
+		s.modulate = modulate
+		node.add_child(s)
+	_layers.append({"node": node, "factor": factor, "base": node.position})
 
 
 func _update_parallax() -> void:
-	if camera == null:
-		return
-	var cp := camera.global_position
 	for data in _layers:
-		var node: Node2D = data["node"]
+		var node: Node3D = data["node"]
 		var factor: Vector2 = data["factor"]
-		var base: Vector2 = data["base"]
-		node.position = Vector2(base.x + cp.x * (1.0 - factor.x), base.y + cp.y * (1.0 - factor.y))
+		var base: Vector3 = data["base"]
+		node.position = Vector3(
+			base.x + _cam_target.x * (1.0 - factor.x),
+			base.y + _cam_target.y * (1.0 - factor.y),
+			base.z
+		)
 
 
 # =====================================================================
@@ -232,7 +296,7 @@ void fragment() {
 	haze.material = hmat
 	fog_layer.add_child(haze)
 
-	# luz calida de pantalla: el sol tiñe la esquina superior derecha
+	# luz cálida de pantalla: el sol tiñe la esquina superior derecha
 	var warm := ColorRect.new()
 	warm.set_anchors_preset(Control.PRESET_FULL_RECT)
 	warm.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -320,12 +384,12 @@ func _build_world() -> void:
 
 func _place_prop(prop: Dictionary) -> void:
 	var pos: Vector2 = prop["pos"]
-	var z: int = prop.get("z", 2)
+	var depth: float = prop.get("depth", W.PROP_Z)
 	match prop["kind"]:
 		"sign":
-			_place(art.sign(), pos, z)
+			_place(art.sign(), pos, depth)
 		"log":
-			_place(art.log(prop.get("size", 3)), pos, z)
+			_place(art.log(prop.get("size", 3)), pos, depth)
 		_:
 			push_warning("Prop desconocido en level_data.gd: %s" % prop["kind"])
 
@@ -344,12 +408,12 @@ func _ground_gaps() -> Array[Vector2]:
 
 
 # =====================================================================
-#  Validacion del nivel
+#  Validación del nivel
 # =====================================================================
 ## Avisa por consola de un nivel que no se puede jugar: plataformas
 ## solapadas, hongos patrullando fuera de su suelo o repisas que no se
 ## alcanzan con el salto. El alcance es conservador (calculado a la misma
-## altura), asi que un aviso de "no se alcanza" conviene mirarlo a mano.
+## altura), así que un aviso de "no se alcanza" conviene mirarlo a mano.
 func _validate_level() -> void:
 	for problem in _level_problems():
 		push_warning("Nivel: " + problem)
@@ -394,10 +458,10 @@ func _level_problems() -> Array[String]:
 	return problems
 
 
-## Alcance del salto como Vector2(horizontal a la misma altura, altura maxima).
+## Alcance del salto como Vector2(horizontal a la misma altura, altura máxima).
 func _jump_envelope() -> Vector2:
 	var rise: float = PLAYER_SCRIPT.JUMP_VELOCITY * PLAYER_SCRIPT.JUMP_VELOCITY / (2.0 * PLAYER_SCRIPT.GRAVITY)
-	var t_up: float = -PLAYER_SCRIPT.JUMP_VELOCITY / PLAYER_SCRIPT.GRAVITY
+	var t_up: float = PLAYER_SCRIPT.JUMP_VELOCITY / PLAYER_SCRIPT.GRAVITY
 	var fall_gravity: float = PLAYER_SCRIPT.GRAVITY * PLAYER_SCRIPT.FALL_MULT
 	var t_down := sqrt(2.0 * rise / fall_gravity)
 	return Vector2(PLAYER_SCRIPT.SPEED * (t_up + t_down), rise)
@@ -419,7 +483,7 @@ func _ground_at(x: float) -> int:
 	return -1
 
 
-## Indices de repisas inalcanzables, propagando desde el suelo hacia arriba.
+## Índices de repisas inalcanzables, propagando desde el suelo hacia arriba.
 func _unreachable_boxes() -> Array[int]:
 	var boxes: Array[Rect2] = []
 	boxes.append_array(_nivel.GROUNDS)
@@ -470,13 +534,17 @@ func _box_name(index: int, ground_count: int) -> String:
 
 
 func _add_gap_mist(left: float, right: float, seed: int) -> void:
-	var s := Sprite2D.new()
+	var s := Sprite3D.new()
 	s.texture = art.mist_band(seed, 0.24)
+	s.pixel_size = 1.0
 	s.centered = true
-	s.position = Vector2((left + right) * 0.5, -7.0)
-	s.scale = Vector2(0.62, 0.62)
+	s.position = Vector3((left + right) * 0.5, 7.0, 2.0)
+	s.scale = Vector3(0.62, 0.62, 1.0)
 	s.modulate = Color(1.0, 1.0, 1.0, 0.7)
-	s.z_index = 3
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	s.transparent = true
+	s.shaded = false
 	mundo.add_child(s)
 
 	var start_x := s.position.x
@@ -487,24 +555,58 @@ func _add_gap_mist(left: float, right: float, seed: int) -> void:
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
+## Construye una plataforma como caja 3D: colisión, cuerpo, tapa de pasto y
+## la textura lateral del arte procedural en la cara frontal.
 func _create_platform(rect: Rect2, floating: bool, seed: int) -> void:
-	var body := StaticBody2D.new()
-	body.name = "Plataforma"
-	body.position = rect.position
-	body.z_index = 0
+	var w := rect.size.x
+	var h := rect.size.y
+	var depth := W.PLATFORM_DEPTH
 
-	var col := CollisionShape2D.new()
-	var shape := RectangleShape2D.new()
-	shape.size = rect.size
+	var body := StaticBody3D.new()
+	body.name = "Plataforma"
+	body.position = Vector3(rect.position.x + w * 0.5, -rect.position.y - h * 0.5, -depth * 0.5)
+	body.collision_layer = 1
+	body.collision_mask = 0
+
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(w, h, depth)
 	col.shape = shape
-	col.position = rect.size * 0.5
 	body.add_child(col)
 
-	var visual := Sprite2D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(w, h, depth)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = P.STONE_D if floating else P.DIRT_D
+	mat.roughness = 1.0
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = mat
+	body.add_child(mi)
+
+	# tapa: lo que la cámara inclinada deja ver
+	var top := PlaneMesh.new()
+	top.size = Vector2(w, depth)
+	var top_mat := StandardMaterial3D.new()
+	top_mat.albedo_color = P.MOSS if floating else P.GRASS_D
+	top_mat.roughness = 1.0
+	top_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var top_mi := MeshInstance3D.new()
+	top_mi.mesh = top
+	top_mi.material_override = top_mat
+	top_mi.position = Vector3(0.0, h * 0.5 + 0.06, 0.0)
+	body.add_child(top_mi)
+
+	# cara frontal con el dibujo procedural de siempre
+	var visual := Sprite3D.new()
 	visual.name = "Visual"
-	visual.texture = art.ground_texture(Vector2i(int(rect.size.x), int(rect.size.y)), floating, seed)
-	visual.centered = false
-	visual.position = Vector2.ZERO
+	visual.texture = art.ground_texture(Vector2i(int(w), int(h)), floating, seed)
+	visual.pixel_size = 1.0
+	visual.centered = true
+	visual.position = Vector3(0.0, 0.0, depth * 0.5 + 0.6)
+	visual.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	visual.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	visual.shaded = false
 	body.add_child(visual)
 
 	mundo.add_child(body)
@@ -516,49 +618,51 @@ func _dress_ground(rect: Rect2, seed: int) -> void:
 	var x := rect.position.x + 40.0
 	while x < rect.end.x - 30.0:
 		var roll := rng.randf()
+		var z := rng.randf_range(-W.PLATFORM_DEPTH + 10.0, -8.0)
 		if roll < 0.44:
-			_place(art.grass_tuft(int(x) + seed), Vector2(x, 0.0), 2, rng.randf_range(0.9, 1.25))
+			_place(art.grass_tuft(int(x) + seed), Vector2(x, rect.position.y), z, rng.randf_range(0.9, 1.25))
 		elif roll < 0.62:
-			_place(art.flower(int(x) + seed), Vector2(x, 0.0), 2)
+			_place(art.flower(int(x) + seed), Vector2(x, rect.position.y), z)
 		elif roll < 0.72:
-			_place(art.small_mushroom(int(x) + seed), Vector2(x, 0.0), 2)
+			_place(art.small_mushroom(int(x) + seed), Vector2(x, rect.position.y), z)
 		elif roll < 0.80:
-			_place(art.rock(int(x) + seed), Vector2(x, 0.0), 2, rng.randf_range(0.85, 1.2))
+			_place(art.rock(int(x) + seed), Vector2(x, rect.position.y), z, rng.randf_range(0.85, 1.2))
 		else:
-			_place(art.fern(int(x) + seed), Vector2(x, 0.0), 2, rng.randf_range(0.95, 1.3))
+			# Los helechos son altos: van detrás del plano de juego para no tapar
+			# al zorro cuando pasa por delante.
+			var fern_z := rng.randf_range(-W.PLATFORM_DEPTH + 10.0, W.PLANE_Z - 6.0)
+			_place(art.fern(int(x) + seed), Vector2(x, rect.position.y), fern_z, rng.randf_range(0.95, 1.3))
 		x += rng.randf_range(38.0, 78.0)
 
-	# helechos extra: el sotobosque se siente mas tupido
+	# helechos extra: el sotobosque se siente más tupido
 	var fx := rect.position.x + rng.randf_range(60.0, 110.0)
 	while fx < rect.end.x - 40.0:
-		_place(art.fern(int(fx) + seed * 5), Vector2(fx, 1.0), 2, rng.randf_range(1.05, 1.45))
+		var fz := rng.randf_range(-W.PLATFORM_DEPTH + 8.0, W.PLANE_Z - 6.0)
+		_place(art.fern(int(fx) + seed * 5), Vector2(fx, rect.position.y), fz, rng.randf_range(1.05, 1.45))
 		fx += rng.randf_range(90.0, 150.0)
 
-	# raices colgando en los bordes del barranco
+	# raíces colgando en los bordes del barranco
 	for side in [rect.position.x, rect.end.x]:
 		for i in range(3):
 			var vine := art.vine_texture(int(side) + i * 37 + seed)
-			var s := Sprite2D.new()
-			s.texture = vine
-			s.centered = false
-			s.position = Vector2(side + rng.randf_range(-8.0, 8.0) + i * 4.0, 2.0)
-			s.scale = Vector2(1.0, rng.randf_range(1.0, 1.45))
-			s.z_index = 3
-			mundo.add_child(s)
+			_place_hanging(vine, Vector2(side + rng.randf_range(-8.0, 8.0) + i * 4.0, rect.position.y + 2.0),
+				0.6, 1.0, rng.randf_range(1.0, 1.45))
 
 
 func _dress_understory(rect: Rect2, seed: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed * 331 + 17
-	# arbustos sueltos al pie del suelo
+	# arbustos sueltos al pie del suelo, detrás del plano de juego
 	var count := 2 + int(rect.size.x / 230.0)
 	for i in range(count):
 		var x := rng.randf_range(rect.position.x + 30.0, rect.end.x - 30.0)
-		_place(art.bush(seed + i * 31), Vector2(x, 3.0), 1, rng.randf_range(0.9, 1.35))
-	# helechos altos entre las matas
+		var z := rng.randf_range(-W.PLATFORM_DEPTH + 12.0, W.PLANE_Z - 6.0)
+		_place(art.bush(seed + i * 31), Vector2(x, rect.position.y + 3.0), z, rng.randf_range(0.9, 1.35))
+	# helechos altos entre las matas, también detrás del zorro
 	for i in range(3):
 		var x := rng.randf_range(rect.position.x + 18.0, rect.end.x - 18.0)
-		_place(art.fern(seed * 7 + i + 3), Vector2(x, 1.0), 1, rng.randf_range(1.2, 1.55))
+		var z := rng.randf_range(-W.PLATFORM_DEPTH + 10.0, W.PLANE_Z - 6.0)
+		_place(art.fern(seed * 7 + i + 3), Vector2(x, rect.position.y + 1.0), z, rng.randf_range(1.2, 1.55))
 
 
 func _dress_ledge(rect: Rect2, seed: int) -> void:
@@ -567,37 +671,47 @@ func _dress_ledge(rect: Rect2, seed: int) -> void:
 	# matas sobre la repisa
 	for i in range(rng.randi_range(1, 3)):
 		var x := rng.randf_range(rect.position.x + 12.0, rect.end.x - 12.0)
-		_place(art.grass_tuft(int(x) + seed), Vector2(x, rect.position.y), 2, rng.randf_range(0.9, 1.2))
+		var z := rng.randf_range(-W.PLATFORM_DEPTH + 10.0, -8.0)
+		_place(art.grass_tuft(int(x) + seed), Vector2(x, rect.position.y), z, rng.randf_range(0.9, 1.2))
 	# enredaderas colgando
 	for i in range(rng.randi_range(1, 3)):
 		var x := rng.randf_range(rect.position.x + 10.0, rect.end.x - 10.0)
-		var vine := art.vine_texture(int(x) + seed)
-		var s := Sprite2D.new()
-		s.texture = vine
-		s.centered = false
-		s.position = Vector2(x, rect.position.y + rect.size.y - 1.0)
-		s.z_index = 2
-		mundo.add_child(s)
+		_place_hanging(art.vine_texture(int(x) + seed),
+			Vector2(x, rect.position.y + rect.size.y - 1.0), 0.6, 1.0)
 
 	# pedrusco de tierra que cuelga de la panza de la repisa
 	if rng.randf() < 0.72:
 		var beard := art.ledge_beard(int(rect.position.x) + seed)
 		var bx := rng.randf_range(rect.position.x + 18.0, rect.end.x - 18.0)
-		var b := Sprite2D.new()
-		b.texture = beard
-		b.centered = false
-		b.position = Vector2(bx - float(beard.get_width()) * 0.5, rect.position.y + rect.size.y - 2.0)
-		b.z_index = 1
-		mundo.add_child(b)
+		_place_hanging(beard, Vector2(bx, rect.position.y + rect.size.y - 2.0), 0.6, 1.0)
 
 
-func _place(tex: Texture2D, pos: Vector2, z: int, scale := 1.0) -> void:
-	var s := Sprite2D.new()
+## Coloca un sprite apoyado sobre una superficie 2D (su base queda en pos.y).
+func _place(tex: Texture2D, pos: Vector2, z: float, scale := 1.0) -> void:
+	var s := Sprite3D.new()
 	s.texture = tex
+	s.pixel_size = 1.0
 	s.centered = true
-	s.scale = Vector2(scale, scale)
-	s.position = Vector2(pos.x, pos.y - tex.get_height() * scale * 0.5)
-	s.z_index = z
+	s.scale = Vector3.ONE * scale
+	s.position = Vector3(pos.x, -pos.y + tex.get_height() * scale * 0.5, z)
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	s.shaded = false
+	mundo.add_child(s)
+
+
+## Coloca un sprite colgante: su borde superior queda en pos.y.
+func _place_hanging(tex: Texture2D, pos: Vector2, z: float, scale := 1.0, scale_y := -1.0) -> void:
+	var sy := scale_y if scale_y > 0.0 else scale
+	var s := Sprite3D.new()
+	s.texture = tex
+	s.pixel_size = 1.0
+	s.centered = true
+	s.scale = Vector3(scale, sy, 1.0)
+	s.position = Vector3(pos.x, -pos.y - tex.get_height() * sy * 0.5, z)
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	s.shaded = false
 	mundo.add_child(s)
 
 
@@ -605,57 +719,56 @@ func _place(tex: Texture2D, pos: Vector2, z: int, scale := 1.0) -> void:
 #  Ambiente
 # =====================================================================
 func _build_ambient() -> void:
-	# luciernagas
-	var flies := CPUParticles2D.new()
+	# luciérnagas
+	var flies := CPUParticles3D.new()
 	flies.name = "Luciernagas"
 	flies.amount = 60
 	flies.lifetime = 7.5
 	flies.preprocess = 4.0
-	flies.position = Vector2(80.0, -70.0)
-	flies.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	flies.emission_rect_extents = Vector2(1000.0, 110.0)
-	flies.direction = Vector2(0.0, -1.0)
+	flies.position = Vector3(80.0, 70.0, 0.0)
+	flies.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	flies.emission_box_extents = Vector3(1000.0, 110.0, 90.0)
+	flies.direction = Vector3(0.0, 1.0, 0.0)
 	flies.spread = 180.0
-	flies.gravity = Vector2.ZERO
+	flies.gravity = Vector3.ZERO
 	flies.initial_velocity_min = 3.0
 	flies.initial_velocity_max = 14.0
 	flies.scale_amount_min = 0.55
 	flies.scale_amount_max = 1.25
-	flies.texture = art.glow_texture()
-	flies.z_index = 6
+	flies.mesh = W.particle_mesh(7.0)
+	flies.material_override = W.particle_material(art.glow_texture(), true)
 	flies.local_coords = false
+	flies.visibility_aabb = AABB(Vector3(-1200.0, -250.0, -200.0), Vector3(2400.0, 650.0, 400.0))
 	var ramp := Gradient.new()
 	ramp.set_color(0, Color(1.0, 0.9, 0.62, 0.0))
 	ramp.set_color(1, Color(1.0, 0.9, 0.62, 0.0))
 	ramp.add_point(0.25, Color(1.0, 0.9, 0.62, 1.0))
 	ramp.add_point(0.7, Color(1.0, 0.85, 0.55, 0.9))
 	flies.color_ramp = ramp
-	var fly_mat := CanvasItemMaterial.new()
-	fly_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	flies.material = fly_mat
 	mundo.add_child(flies)
 
 	# hojas que caen
-	var leaves := CPUParticles2D.new()
+	var leaves := CPUParticles3D.new()
 	leaves.name = "Hojas"
 	leaves.amount = 15
 	leaves.lifetime = 13.0
 	leaves.preprocess = 6.0
-	leaves.position = Vector2(80.0, -215.0)
-	leaves.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	leaves.emission_rect_extents = Vector2(1050.0, 30.0)
-	leaves.direction = Vector2(0.0, 1.0)
+	leaves.position = Vector3(80.0, 215.0, 0.0)
+	leaves.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	leaves.emission_box_extents = Vector3(1050.0, 30.0, 100.0)
+	leaves.direction = Vector3(0.0, -1.0, 0.0)
 	leaves.spread = 32.0
-	leaves.gravity = Vector2(5.0, 5.0)
+	leaves.gravity = Vector3(5.0, -5.0, 2.0)
 	leaves.initial_velocity_min = 4.0
 	leaves.initial_velocity_max = 12.0
 	leaves.angular_velocity_min = -55.0
 	leaves.angular_velocity_max = 45.0
 	leaves.scale_amount_min = 0.55
 	leaves.scale_amount_max = 1.0
-	leaves.texture = art.leaf_particle()
-	leaves.z_index = 7
+	leaves.mesh = W.particle_mesh(6.0)
+	leaves.material_override = W.particle_material(art.leaf_particle(), false)
 	leaves.local_coords = false
+	leaves.visibility_aabb = AABB(Vector3(-1200.0, -250.0, -200.0), Vector3(2400.0, 650.0, 400.0))
 	leaves.color = Color(1.0, 0.94, 0.8, 0.78)
 	mundo.add_child(leaves)
 
@@ -664,13 +777,12 @@ func _build_ambient() -> void:
 #  Entidades
 # =====================================================================
 func _build_player() -> void:
-	var p := CharacterBody2D.new()
+	var p := CharacterBody3D.new()
 	p.name = "Zorro"
 	p.set_script(PLAYER_SCRIPT)
-	p.position = _nivel.SPAWN
-	p.z_index = 5
+	p.position = W.to_world(_nivel.SPAWN)
 	add_child(p)
-	p.set("respawn_position", _nivel.SPAWN)
+	p.set("respawn_position", p.position)
 	player = p
 
 
@@ -681,7 +793,7 @@ func _build_enemies() -> void:
 		_spawn_enemy(pos, patrol.x, patrol.y)
 
 
-## Patrulla por defecto: el tramo de suelo que contiene la posicion, con margen.
+## Patrulla por defecto: el tramo de suelo que contiene la posición, con margen.
 func _patrol_for(pos: Vector2) -> Vector2:
 	var ground_index := _ground_at(pos.x)
 	if ground_index < 0:
@@ -691,11 +803,10 @@ func _patrol_for(pos: Vector2) -> Vector2:
 
 
 func _spawn_enemy(pos: Vector2, left: float, right: float) -> void:
-	var e := CharacterBody2D.new()
+	var e := CharacterBody3D.new()
 	e.name = "Hongo"
 	e.set_script(load("res://scripts/enemy.gd"))
-	e.position = pos
-	e.z_index = 4
+	e.position = W.to_world(pos)
 	e.set("patrol_left", left)
 	e.set("patrol_right", right)
 	mundo.add_child(e)
@@ -709,35 +820,35 @@ func _build_saberes() -> void:
 		var id: String = data["id"]
 		if _db != null and _db.tiene(id):
 			continue
-		var s := Area2D.new()
+		var s := Area3D.new()
 		s.name = "Saber_" + id
 		s.set_script(SABER_PICKUP)
 		s.set("saber_id", id)
-		s.position = data["pos"]
+		s.position = W.to_world(data["pos"])
 		mundo.add_child(s)
 
 
 func _build_doors() -> void:
 	for data in _nivel.DOORS:
-		var d := StaticBody2D.new()
+		var d := StaticBody3D.new()
 		d.name = "Puerta_" + str(data["id"])
 		d.set_script(PUERTA)
 		d.set("puerta_id", data["id"])
 		d.set("requires", data["requires"])
 		d.set("pregunta_de", str(data.get("pregunta_de", "")))
-		d.position = data["pos"]
+		d.position = W.to_world(data["pos"])
 		mundo.add_child(d)
 
 
 ## Cambia al nivel de zona indicado: reemplaza el mundo (plataformas,
-## decoracion, saberes, puertas, enemigos) y reposiciona al jugador y la
-## camara en el nuevo spawn. El fondo, el marco de pantalla y la UI se
+## decoración, saberes, puertas, enemigos) y reposiciona al jugador y la
+## cámara en el nuevo spawn. El fondo, el marco de pantalla y la UI se
 ## conservan.
 func cargar_nivel(nuevo_nivel: RefCounted) -> void:
 	_nivel = nuevo_nivel
 	if mundo != null:
 		mundo.queue_free()
-	mundo = Node2D.new()
+	mundo = Node3D.new()
 	mundo.name = "Mundo"
 	add_child(mundo)
 
@@ -748,47 +859,85 @@ func cargar_nivel(nuevo_nivel: RefCounted) -> void:
 	_build_doors()
 
 	if player != null:
-		player.global_position = _nivel.SPAWN
-		player.respawn_position = _nivel.SPAWN
+		var spawn := W.to_world(_nivel.SPAWN)
+		player.global_position = spawn
+		player.respawn_position = spawn
+		player.velocity = Vector3.ZERO
 	if camera != null:
-		camera.global_position = player.global_position + Vector2(0.0, -78.0)
+		_cam_target = _target_for_camera(player.global_position)
+		var forward := -camera.global_transform.basis.z
+		camera.global_position = _cam_target - forward * W.CAM_DISTANCE
 	_update_parallax()
 	_actualizar_contador()
 
 
 # =====================================================================
-#  Camara
+#  Cámara
 # =====================================================================
 func _build_camera() -> void:
-	camera = Camera2D.new()
+	camera = Camera3D.new()
 	camera.name = "Camara"
-	camera.zoom = Vector2(2.2, 2.2)
-	camera.position_smoothing_enabled = false
-	camera.enabled = true
+	camera.fov = W.CAM_FOV
+	camera.near = W.CAM_NEAR
+	camera.far = W.CAM_FAR
+	camera.rotation_degrees = Vector3(W.CAM_PITCH, W.CAM_YAW, 0.0)
 	add_child(camera)
-	camera.make_current()
-	camera.global_position = player.global_position + Vector2(0.0, -78.0)
+	camera.current = true
+	_cam_target = _target_for_camera(player.global_position)
+	var forward := -camera.global_transform.basis.z
+	camera.global_position = _cam_target - forward * W.CAM_DISTANCE
+	_build_sky_quad()
+
+
+## Punto al que debe mirar la cámara: el centro del zorro (no sus pies),
+## respetando los límites de la zona. Sin adelanto en la dirección de la
+## carrera: el zorro queda clavado al centro mientras recorre el nivel.
+func _target_for_camera(pos: Vector3) -> Vector3:
+	var target := Vector3(
+		pos.x,
+		pos.y + PLAYER_SCRIPT.SPRITE_CENTER_Y,
+		W.PLANE_Z
+	)
+	var view := get_viewport().get_visible_rect().size
+	var aspect := view.x / maxf(view.y, 1.0)
+	var half_h := W.CAM_DISTANCE * tan(deg_to_rad(W.CAM_FOV * 0.5))
+	var half_w := half_h * aspect
+	var bounds: Rect2 = _nivel.CAM_BOUNDS
+	var min_x := bounds.position.x + half_w
+	var max_x := bounds.end.x - half_w
+	if min_x > max_x:
+		target.x = (bounds.position.x + bounds.end.x) * 0.5
+	else:
+		target.x = clampf(target.x, min_x, max_x)
+	var bottom := -bounds.end.y
+	var top := -bounds.position.y
+	target.y = clampf(target.y, bottom, top)
+	return target
 
 
 func _process(delta: float) -> void:
 	if player == null or camera == null:
 		return
 
-	var target := Vector2(
-		player.global_position.x + clampf(player.velocity.x * 0.22, -78.0, 78.0),
-		player.global_position.y - 78.0
+	_cam_target = _target_for_camera(player.global_position)
+	var forward := -camera.global_transform.basis.z
+	var desired := _cam_target - forward * W.CAM_DISTANCE
+	# En horizontal la cámara sigue al zorro sin retraso: con el lerp anterior
+	# se quedaba atrás y el zorro se corría del centro al caminar. En vertical
+	# se conserva la suavidad para que los saltos no sacudan el mundo.
+	camera.global_position = Vector3(
+		desired.x,
+		lerpf(camera.global_position.y, desired.y, 1.0 - exp(-7.5 * delta)),
+		desired.z
 	)
-	var half := get_viewport_rect().size * 0.5 / camera.zoom
-	var bounds: Rect2 = _nivel.CAM_BOUNDS
-	target.x = clampf(target.x, bounds.position.x + half.x, bounds.end.x - half.x)
-	target.y = clampf(target.y, bounds.position.y, bounds.end.y)
-	camera.global_position = camera.global_position.lerp(target, 1.0 - exp(-7.5 * delta))
 
 	_shake = move_toward(_shake, 0.0, delta * 9.0)
 	if _shake > 0.01:
-		camera.offset = Vector2(_rng.randf_range(-1.0, 1.0), _rng.randf_range(-1.0, 1.0)) * _shake
+		camera.h_offset = _rng.randf_range(-1.0, 1.0) * _shake
+		camera.v_offset = _rng.randf_range(-1.0, 1.0) * _shake
 	else:
-		camera.offset = Vector2.ZERO
+		camera.h_offset = 0.0
+		camera.v_offset = 0.0
 
 	_update_parallax()
 
@@ -813,7 +962,7 @@ func _build_ui() -> void:
 	layer.layer = 20
 	add_child(layer)
 
-	# vineta
+	# viñeta
 	var vignette := ColorRect.new()
 	vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -833,7 +982,7 @@ void fragment() {
 	vignette.material = vmat
 	layer.add_child(vignette)
 
-	# destello de reaparicion
+	# destello de reaparición
 	_flash = ColorRect.new()
 	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1005,7 +1154,7 @@ func _build_progress(layer: CanvasLayer) -> void:
 func _actualizar_contador() -> void:
 	if _saberes_label == null or _db == null or _nivel == null:
 		return
-	# Contar solo los saberes que realmente estan en este nivel, no todos los
+	# Contar solo los saberes que realmente están en este nivel, no todos los
 	# archivos de data/saberes/ que compartan la zona.
 	var total_nivel: int = _nivel.SABERES.size()
 	var recogidos := 0
@@ -1037,8 +1186,8 @@ func _on_saber_recogido(id: String) -> void:
 	mostrar_aviso("%s — %s" % [tr("SABER_ENCONTRADO"), nombre])
 
 
-## Nivel al que lleva cada puerta. Si una puerta no figura aca, se abre pero
-## no cambia de zona (por ejemplo, una puerta de una zona que todavia no existe).
+## Nivel al que lleva cada puerta. Si una puerta no figura acá, se abre pero
+## no cambia de zona (por ejemplo, una puerta de una zona que todavía no existe).
 func _nivel_destino(id: String):
 	match id:
 		"puerta_ruinas_01":

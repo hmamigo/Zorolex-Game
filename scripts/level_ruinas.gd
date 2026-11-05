@@ -42,11 +42,13 @@ const LEDGES := [
 
 ## Decoracion con posicion fija. "kind" elige el dibujo en pixel_art.gd:
 ##   sign = cartel, log = tronco caido ("size" = cantidad de troncos).
-## "z" es la capa de dibujo.
+## "depth" es opcional: por defecto el prop queda un poco por detras del plano
+## de juego (el centro de la tapa del terreno) para que no tape al zorro. Los
+## valores negativos lo alejan de la camara y los positivos lo acercan.
 const PROPS := [
-	{ "kind": "sign", "pos": Vector2(-650.0, 0.0), "z": 2 },
-	{ "kind": "log", "pos": Vector2(250.0, 0.0), "z": 2, "size": 3 },
-	{ "kind": "sign", "pos": Vector2(1150.0, 0.0), "z": 2 },
+	{ "kind": "sign", "pos": Vector2(-650.0, 0.0) },
+	{ "kind": "log", "pos": Vector2(250.0, 0.0), "size": 3 },
+	{ "kind": "sign", "pos": Vector2(1150.0, 0.0) },
 ]
 
 ## Hongos. "patrol" = Vector2(izquierda, derecha) es opcional: si se omite, el

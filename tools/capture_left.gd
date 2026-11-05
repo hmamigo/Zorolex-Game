@@ -7,6 +7,7 @@ extends SceneTree
 ## Salida: out/09_left.png
 
 const OUT := "res://out"
+const W = preload("res://scripts/world_3d.gd")
 
 var frame := 0
 var main: Node
@@ -21,8 +22,8 @@ func _initialize() -> void:
 func _process(_delta: float) -> bool:
 	frame += 1
 	if frame == 200:
-		main.player.global_position = Vector2(600.0, -20.0)
-		main.player.velocity = Vector2.ZERO
+		main.player.global_position = W.to_world(Vector2(600.0, -20.0))
+		main.player.velocity = Vector3.ZERO
 	if frame == 215:
 		Input.action_press("ui_left")
 	if frame == 245:
