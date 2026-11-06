@@ -24,8 +24,14 @@ Consultadas el 2026-10-31 (Bosque de Bruma) y el 2026-11-01 (Ruinas).
 
 - **Arte**: generado en tiempo de ejecución por el propio juego (`scripts/pixel_art.gd`,
   `scripts/sprite_data.gd`) a partir de la paleta de `scripts/palette.gd`. No usa
-  imágenes, fuentes ni audio externos.
-- **Tipografía**: la fuente por defecto de Godot.
+  imágenes ni audio externos.
+- **Tipografía**: dos familias con licencia SIL Open Font License 1.1 (OFL), en
+  `assets/fonts/`. Los archivos de licencia acompañan a cada fuente.
+  - **Pixelify Sans**, de Stefie Justprince — títulos, HUD y números.
+    <https://fonts.google.com/specimen/Pixelify+Sans> · `assets/fonts/OFL-PixelifySans.txt`.
+  - **Alegreya**, de Juan Pablo del Peral (Huerta Tipográfica) — cuerpo, cursivas y
+    pista de controles. <https://fonts.google.com/specimen/Alegreya> ·
+    `assets/fonts/OFL-Alegreya.txt`.
 
 ## Herramientas de desarrollo
 

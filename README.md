@@ -88,6 +88,8 @@ godot --path .
 - Las capturas de pantalla para revisar el arte se generan con los scripts de `tools/`
   y se guardan en `out/` (no se versiona). Las herramientas en Python necesitan
   [Pillow](https://python-pillow.org/).
+- El backlog de mejoras visuales (prioridad, estado y criterios de aceptación) está en
+  [`docs/mejoras_visuales.md`](docs/mejoras_visuales.md).
 
 ## Hoja de ruta
 

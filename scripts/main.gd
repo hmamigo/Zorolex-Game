@@ -7,6 +7,7 @@ extends Node3D
 ## El zorro y los enemigos son billboards 2D dentro de ese mundo.
 
 const P = preload("res://scripts/palette.gd")
+const UIS = preload("res://scripts/ui_style.gd")
 const ART = preload("res://scripts/pixel_art.gd")
 const W = preload("res://scripts/world_3d.gd")
 const LEVEL_BOSQUE = preload("res://scripts/level_data.gd")
@@ -36,9 +37,15 @@ var _rng := RandomNumberGenerator.new()
 var _shake := 0.0
 var _flash: ColorRect
 var _hint: Label
+var _hint_panel: PanelContainer
+var _contador_panel: PanelContainer
 var _saberes_label: Label
 var _aviso: Label
+var _aviso_panel: PanelContainer
 var _aviso_tween: Tween
+var _title_layer: Control
+var _title_tween: Tween
+var _titulo_visible := true
 var _pausas := 0
 ## Punto al que mira la cámara. También manda el parallax del fondo.
 var _cam_target := Vector3.ZERO
@@ -201,6 +208,7 @@ func _build_parallax() -> void:
 	pit.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 	pit.transparent = true
 	pit.shaded = false
+	pit.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(pit)
 
 
@@ -224,6 +232,7 @@ func _single_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: float, sca
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 	s.transparent = true
 	s.shaded = false
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if additive:
 		s.material_override = W.additive_material(tex, modulate)
 	else:
@@ -253,6 +262,7 @@ func _tiled_layer(tex: Texture2D, factor: Vector2, base: Vector2, z: float, tile
 		s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 		s.transparent = true
 		s.shaded = false
+		s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		s.modulate = modulate
 		node.add_child(s)
 	_layers.append({"node": node, "factor": factor, "base": node.position})
@@ -545,6 +555,7 @@ func _add_gap_mist(left: float, right: float, seed: int) -> void:
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 	s.transparent = true
 	s.shaded = false
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mundo.add_child(s)
 
 	var start_x := s.position.x
@@ -582,19 +593,25 @@ func _create_platform(rect: Rect2, floating: bool, seed: int) -> void:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.material_override = mat
+	# El decorado no proyecta sombra: las repisas flotantes dejaban rectangulos
+	# duros sobre el pasto y competian con las blob shadows de las entidades.
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.add_child(mi)
 
-	# tapa: lo que la cámara inclinada deja ver
+	# tapa: textura procedural sin luz, para que el sol no la queme y case con
+	# el sprite frontal (que tambien es unshaded).
 	var top := PlaneMesh.new()
 	top.size = Vector2(w, depth)
 	var top_mat := StandardMaterial3D.new()
-	top_mat.albedo_color = P.MOSS if floating else P.GRASS_D
-	top_mat.roughness = 1.0
+	top_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	top_mat.albedo_texture = art.ground_top_texture(Vector2i(int(w), int(depth)), floating, seed)
+	top_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	top_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var top_mi := MeshInstance3D.new()
 	top_mi.mesh = top
 	top_mi.material_override = top_mat
 	top_mi.position = Vector3(0.0, h * 0.5 + 0.06, 0.0)
+	top_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.add_child(top_mi)
 
 	# cara frontal con el dibujo procedural de siempre
@@ -607,7 +624,28 @@ func _create_platform(rect: Rect2, floating: bool, seed: int) -> void:
 	visual.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	visual.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	visual.shaded = false
+	visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.add_child(visual)
+
+	# laterales: con el giro leve de la camara se ve la cara lateral del
+	# BoxMesh, que era un plano pelado. Se cubre con el mismo dibujo procedural
+	# de la cara frontal, como si fuera el corte del terreno.
+	var side_tex := art.ground_side_texture(Vector2i(int(depth), int(h)), floating, seed + 101)
+	for lado in [-1.0, 1.0]:
+		var side := Sprite3D.new()
+		side.name = "Lateral"
+		side.texture = side_tex
+		side.pixel_size = 1.0
+		side.centered = true
+		side.position = Vector3(lado * (w * 0.5 + 0.6), 0.0, 0.0)
+		side.rotation_degrees.y = 90.0 * lado
+		side.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		side.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		side.shaded = false
+		# La camara mira desde +X: la cara -X no debe colarse como una tira.
+		side.double_sided = false
+		side.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		body.add_child(side)
 
 	mundo.add_child(body)
 
@@ -697,6 +735,7 @@ func _place(tex: Texture2D, pos: Vector2, z: float, scale := 1.0) -> void:
 	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	s.shaded = false
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mundo.add_child(s)
 
 
@@ -712,6 +751,7 @@ func _place_hanging(tex: Texture2D, pos: Vector2, z: float, scale := 1.0, scale_
 	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	s.shaded = false
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mundo.add_child(s)
 
 
@@ -1014,141 +1054,274 @@ func _on_diario_abierto() -> void:
 func pausar() -> void:
 	_pausas += 1
 	get_tree().paused = _pausas > 0
+	_actualizar_hud()
 
 
 func reanudar() -> void:
 	_pausas = maxi(0, _pausas - 1)
 	get_tree().paused = _pausas > 0
+	_actualizar_hud()
 
 
 func _build_title(layer: CanvasLayer) -> void:
+	_titulo_visible = true
+	_title_layer = Control.new()
+	_title_layer.name = "Portada"
+	_title_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_title_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_title_layer)
+
+	var scrim := ColorRect.new()
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.color = P.UI_SCRIM_TITLE
+	scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_title_layer.add_child(scrim)
+
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.anchor_bottom = 0.62
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(center)
+	_title_layer.add_child(center)
 
 	var card := PanelContainer.new()
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.09, 0.07, 0.36)
-	style.border_color = Color(P.CREAM.r, P.CREAM.g, P.CREAM.b, 0.16)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(1)
-	style.content_margin_left = 58.0
-	style.content_margin_right = 58.0
-	style.content_margin_top = 22.0
-	style.content_margin_bottom = 22.0
-	card.add_theme_stylebox_override("panel", style)
+	card.add_theme_stylebox_override("panel", UIS.portada())
 	center.add_child(card)
 
+	var filete := PanelContainer.new()
+	filete.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var filete_estilo := UIS.filete(P.GOLD, 1)
+	filete_estilo.content_margin_left = 18.0
+	filete_estilo.content_margin_right = 18.0
+	filete_estilo.content_margin_top = 12.0
+	filete_estilo.content_margin_bottom = 12.0
+	filete.add_theme_stylebox_override("panel", filete_estilo)
+	card.add_child(filete)
+
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 7)
-	card.add_child(box)
+	box.add_theme_constant_override("separation", 8)
+	filete.add_child(box)
 
 	var kicker := Label.new()
-	kicker.text = "C A P Í T U L O   I"
+	kicker.text = tr("TITULO_CAPITULO")
 	kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	kicker.add_theme_font_size_override("font_size", 11)
-	kicker.add_theme_color_override("font_color", Color(P.CREAM.r, P.CREAM.g, P.CREAM.b, 0.52))
-	kicker.add_theme_color_override("font_shadow_color", Color(0.08, 0.06, 0.04, 0.6))
-	kicker.add_theme_constant_override("shadow_offset_x", 1)
-	kicker.add_theme_constant_override("shadow_offset_y", 2)
+	UIS.aplicar_titulo(kicker, 13, P.CREAM_D, 500)
 	box.add_child(kicker)
 
 	var title := Label.new()
-	title.text = "Bosque de Bruma"
+	title.text = tr("TITULO_ZONA_BOSQUE")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 40)
-	title.add_theme_color_override("font_color", P.CREAM)
-	title.add_theme_color_override("font_shadow_color", Color(0.08, 0.06, 0.04, 0.7))
+	UIS.aplicar_titulo(title, 52, P.CREAM, 600)
+	title.add_theme_color_override("font_shadow_color", P.INK)
 	title.add_theme_constant_override("shadow_offset_x", 2)
 	title.add_theme_constant_override("shadow_offset_y", 3)
 	box.add_child(title)
 
-	var rule_center := CenterContainer.new()
-	rule_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(rule_center)
+	var orn := HBoxContainer.new()
+	orn.alignment = BoxContainer.ALIGNMENT_CENTER
+	orn.add_theme_constant_override("separation", 12)
+	orn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(orn)
 
-	var rule := ColorRect.new()
-	rule.color = Color(P.CREAM.r, P.CREAM.g, P.CREAM.b, 0.26)
-	rule.custom_minimum_size = Vector2(172.0, 1.0)
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rule_center.add_child(rule)
+	var rule_l := ColorRect.new()
+	rule_l.color = P.GOLD
+	rule_l.custom_minimum_size = Vector2(88.0, 1.0)
+	rule_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rule_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	orn.add_child(rule_l)
+
+	var diamante := Label.new()
+	diamante.text = "◆"
+	UIS.aplicar_cuerpo(diamante, 11, P.GOLD, 400)
+	diamante.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	orn.add_child(diamante)
+
+	var rule_r := ColorRect.new()
+	rule_r.color = P.GOLD
+	rule_r.custom_minimum_size = Vector2(88.0, 1.0)
+	rule_r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rule_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	orn.add_child(rule_r)
 
 	var sub := Label.new()
-	sub.text = "un paseo al atardecer"
+	sub.text = tr("TITULO_SUBTITULO")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_font_size_override("font_size", 14)
-	sub.add_theme_color_override("font_color", Color(P.CREAM_D.r, P.CREAM_D.g, P.CREAM_D.b, 0.85))
-	sub.add_theme_color_override("font_shadow_color", Color(0.08, 0.06, 0.04, 0.5))
-	sub.add_theme_constant_override("shadow_offset_x", 1)
-	sub.add_theme_constant_override("shadow_offset_y", 2)
+	UIS.aplicar_cuerpo(sub, 18, P.CREAM_D, 400, true)
 	box.add_child(sub)
 
-	card.modulate.a = 0.0
+	var espacio := Control.new()
+	espacio.custom_minimum_size = Vector2(0.0, 10.0)
+	espacio.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(espacio)
+
+	var press := Label.new()
+	press.text = tr("TITULO_PRESIONA")
+	press.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UIS.aplicar_titulo(press, 12, P.CREAM_D, 500)
+	press.modulate.a = 0.55
+	box.add_child(press)
+
+	_title_layer.modulate.a = 0.0
+	_title_tween = create_tween()
+	_title_tween.tween_property(_title_layer, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_OUT)
+	_title_tween.tween_interval(2.2)
+	_title_tween.tween_property(_title_layer, "modulate:a", 0.0, 0.8).set_ease(Tween.EASE_IN)
+	_title_tween.tween_callback(_terminar_titulo)
+
+	var pulso := _title_layer.create_tween().set_loops()
+	pulso.tween_property(press, "modulate:a", 1.0, 1.0).set_trans(Tween.TRANS_SINE)
+	pulso.tween_property(press, "modulate:a", 0.45, 1.0).set_trans(Tween.TRANS_SINE)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _titulo_visible:
+		return
+	var dispara := false
+	if event is InputEventKey:
+		var tecla := event as InputEventKey
+		dispara = tecla.pressed and not tecla.echo
+	elif event is InputEventJoypadButton:
+		dispara = (event as InputEventJoypadButton).pressed
+	elif event is InputEventMouseButton:
+		dispara = (event as InputEventMouseButton).pressed
+	if dispara:
+		_cerrar_titulo()
+		get_viewport().set_input_as_handled()
+
+
+func _cerrar_titulo() -> void:
+	if not _titulo_visible:
+		return
+	_titulo_visible = false
+	if _title_tween != null and _title_tween.is_valid():
+		_title_tween.kill()
+	if _title_layer == null:
+		return
 	var t := create_tween()
-	t.tween_property(card, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT)
-	t.tween_interval(2.2)
-	t.tween_property(card, "modulate:a", 0.0, 0.9).set_ease(Tween.EASE_IN)
-	t.tween_callback(center.queue_free)
+	t.tween_property(_title_layer, "modulate:a", 0.0, 0.22).set_ease(Tween.EASE_IN)
+	t.tween_callback(_terminar_titulo)
+
+
+func _terminar_titulo() -> void:
+	_titulo_visible = false
+	if _title_layer != null:
+		_title_layer.queue_free()
+		_title_layer = null
+	_actualizar_hud()
 
 
 func _build_hint(layer: CanvasLayer) -> void:
+	var centro := CenterContainer.new()
+	centro.anchor_left = 0.0
+	centro.anchor_right = 1.0
+	centro.anchor_top = 1.0
+	centro.anchor_bottom = 1.0
+	centro.offset_top = -64.0
+	centro.offset_bottom = -22.0
+	centro.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(centro)
+
+	_hint_panel = PanelContainer.new()
+	_hint_panel.add_theme_stylebox_override("panel", UIS.hud())
+	_hint_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	centro.add_child(_hint_panel)
+
 	_hint = Label.new()
 	_hint.text = tr("PISTA_CONTROLES")
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.anchor_left = 0.0
-	_hint.anchor_right = 1.0
-	_hint.anchor_top = 1.0
-	_hint.anchor_bottom = 1.0
-	_hint.offset_top = -58.0
-	_hint.offset_bottom = -30.0
+	UIS.aplicar_cuerpo(_hint, 15, P.CREAM, 400)
 	_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hint.add_theme_font_size_override("font_size", 15)
-	_hint.add_theme_color_override("font_color", Color(0.97, 0.93, 0.82, 0.78))
-	_hint.add_theme_color_override("font_shadow_color", Color(0.06, 0.05, 0.04, 0.8))
-	_hint.add_theme_constant_override("shadow_offset_x", 1)
-	_hint.add_theme_constant_override("shadow_offset_y", 2)
-	_hint.modulate.a = 0.0
-	layer.add_child(_hint)
+	_hint_panel.add_child(_hint)
 
+	_hint_panel.modulate.a = 0.0
 	var t := create_tween()
 	t.tween_interval(1.1)
-	t.tween_property(_hint, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT)
+	t.tween_property(_hint_panel, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT)
+	t.tween_interval(5.0)
+	t.tween_property(_hint_panel, "modulate:a", 0.0, 0.8).set_ease(Tween.EASE_IN)
 
 
 # =====================================================================
 #  Saberes en pantalla
 # =====================================================================
 func _build_progress(layer: CanvasLayer) -> void:
+	_contador_panel = PanelContainer.new()
+	_contador_panel.name = "ContadorSaberes"
+	_contador_panel.position = Vector2(22.0, 14.0)
+	_contador_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_contador_panel.add_theme_stylebox_override("panel", UIS.hud())
+	layer.add_child(_contador_panel)
+
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 8)
+	_contador_panel.add_child(fila)
+
+	var icono := TextureRect.new()
+	icono.texture = art.saber_page()
+	icono.custom_minimum_size = Vector2(15.0, 19.0)
+	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icono.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icono.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fila.add_child(icono)
+
 	_saberes_label = Label.new()
-	_saberes_label.name = "ContadorSaberes"
-	_saberes_label.position = Vector2(24.0, 16.0)
-	_saberes_label.add_theme_font_size_override("font_size", 14)
-	_saberes_label.add_theme_color_override("font_color", Color(0.97, 0.93, 0.82, 0.82))
-	_saberes_label.add_theme_color_override("font_shadow_color", Color(0.06, 0.05, 0.04, 0.8))
-	_saberes_label.add_theme_constant_override("shadow_offset_x", 1)
-	_saberes_label.add_theme_constant_override("shadow_offset_y", 2)
+	UIS.aplicar_titulo(_saberes_label, 16, P.CREAM, 500)
+	_saberes_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_saberes_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(_saberes_label)
+	fila.add_child(_saberes_label)
 	_actualizar_contador()
 
+	# Aviso flotante arriba, centrado y con la hoja como icono.
+	var aviso_centro := CenterContainer.new()
+	aviso_centro.anchor_left = 0.0
+	aviso_centro.anchor_right = 1.0
+	aviso_centro.offset_top = 54.0
+	aviso_centro.offset_bottom = 104.0
+	aviso_centro.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(aviso_centro)
+
+	_aviso_panel = PanelContainer.new()
+	_aviso_panel.name = "Aviso"
+	_aviso_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_aviso_panel.add_theme_stylebox_override("panel", UIS.aviso())
+	aviso_centro.add_child(_aviso_panel)
+
+	var aviso_fila := HBoxContainer.new()
+	aviso_fila.add_theme_constant_override("separation", 8)
+	_aviso_panel.add_child(aviso_fila)
+
+	var aviso_icono := TextureRect.new()
+	aviso_icono.texture = art.saber_page()
+	aviso_icono.custom_minimum_size = Vector2(13.0, 17.0)
+	aviso_icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	aviso_icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	aviso_icono.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	aviso_icono.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	aviso_icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	aviso_fila.add_child(aviso_icono)
+
 	_aviso = Label.new()
-	_aviso.name = "Aviso"
+	UIS.aplicar_cuerpo(_aviso, 17, P.CREAM, 500)
 	_aviso.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_aviso.anchor_left = 0.0
-	_aviso.anchor_right = 1.0
-	_aviso.offset_top = 60.0
-	_aviso.offset_bottom = 96.0
-	_aviso.add_theme_font_size_override("font_size", 17)
-	_aviso.add_theme_color_override("font_color", P.CREAM)
-	_aviso.add_theme_color_override("font_shadow_color", Color(0.06, 0.05, 0.04, 0.85))
-	_aviso.add_theme_constant_override("shadow_offset_x", 1)
-	_aviso.add_theme_constant_override("shadow_offset_y", 2)
+	_aviso.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_aviso.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_aviso.modulate.a = 0.0
-	layer.add_child(_aviso)
+	aviso_fila.add_child(_aviso)
+
+	_aviso_panel.modulate.a = 0.0
+	_actualizar_hud()
+
+
+## El HUD se retira durante la portada y mientras el diario o la pregunta
+## tienen el juego en pausa. Al volver, reaparece sin tapar el mundo.
+func _actualizar_hud() -> void:
+	var oculto := _titulo_visible or _pausas > 0
+	if _contador_panel != null:
+		_contador_panel.visible = not oculto
+	if _aviso_panel != null:
+		_aviso_panel.visible = not oculto
+	if _hint_panel != null:
+		_hint_panel.visible = not oculto
 
 
 func _actualizar_contador() -> void:
@@ -1164,22 +1337,35 @@ func _actualizar_contador() -> void:
 	_saberes_label.text = tr("SABERES_CONTADOR") % [recogidos, total_nivel]
 
 
+## Pequeno pulso del contador al recoger un saber.
+func _pulsar_contador() -> void:
+	if _contador_panel == null:
+		return
+	_contador_panel.pivot_offset = _contador_panel.size * 0.5
+	var t := create_tween()
+	t.tween_property(_contador_panel, "scale", Vector2(1.08, 1.08), 0.1) \
+		.set_ease(Tween.EASE_OUT)
+	t.tween_property(_contador_panel, "scale", Vector2.ONE, 0.28) \
+		.set_ease(Tween.EASE_IN_OUT)
+
+
 ## Mensaje breve arriba de la pantalla (saber encontrado, puerta cerrada).
 func mostrar_aviso(texto: String) -> void:
-	if _aviso == null:
+	if _aviso == null or _aviso_panel == null:
 		return
 	_aviso.text = texto
-	_aviso.modulate.a = 0.0
+	_aviso_panel.modulate.a = 0.0
 	if _aviso_tween != null and _aviso_tween.is_valid():
 		_aviso_tween.kill()
 	_aviso_tween = create_tween()
-	_aviso_tween.tween_property(_aviso, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
+	_aviso_tween.tween_property(_aviso_panel, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
 	_aviso_tween.tween_interval(2.2)
-	_aviso_tween.tween_property(_aviso, "modulate:a", 0.0, 0.5).set_ease(Tween.EASE_IN)
+	_aviso_tween.tween_property(_aviso_panel, "modulate:a", 0.0, 0.5).set_ease(Tween.EASE_IN)
 
 
 func _on_saber_recogido(id: String) -> void:
 	_actualizar_contador()
+	_pulsar_contador()
 	var nombre := id
 	if _db != null:
 		nombre = str(_db.titulo(id))

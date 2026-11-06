@@ -367,6 +367,137 @@ func ground_texture(size: Vector2i, floating := false, seed := 0) -> ImageTextur
 	return ImageTexture.create_from_image(img)
 
 
+## Tapa de una plataforma vista en 2.5D. La fila inferior es el borde que toca
+## la cara frontal (el pasto que cuelga), y la superior queda bajo las copas,
+## mas oscura. Se dibuja sin luz para que el sol no la queme y para que case con
+## el sprite frontal, que tambien es unshaded.
+func ground_top_texture(size: Vector2i, floating := false, seed := 0) -> ImageTexture:
+	var w := maxi(size.x, 8)
+	var d := maxi(size.y, 8)
+	var img := Image.create(w, d, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed * 6151 + w * 53 + d * 29
+
+	var base: Color = P.MOSS if floating else P.GRASS
+	var dark: Color = P.MOSS.darkened(0.12) if floating else P.GRASS_D
+	var light: Color = P.MOSS_L if floating else P.GRASS_L
+	var bright: Color = P.MOSS_L.lightened(0.12) if floating else P.GRASS_LL
+	img.fill(base)
+
+	# manchas amplias de pasto/musgo: dan escala sin ruido
+	for i in range(4 + int(w / 180.0)):
+		var cx := rng.randi_range(2, maxi(3, w - 3))
+		var cy := rng.randi_range(6, maxi(7, d - 4))
+		var tone: Color = dark.lerp(base, rng.randf_range(0.30, 0.70))
+		if rng.randf() < 0.5:
+			tone = light.lerp(base, rng.randf_range(0.30, 0.70))
+		_ellipse(img, cx, cy, rng.randi_range(10, 34), rng.randi_range(4, 14), tone)
+
+	# grano en bloques de 2x2 (se lee como textura de pixel art, no como ruido)
+	for y in range(0, d, 2):
+		for x in range(0, w, 2):
+			if rng.randf() < 0.20:
+				var c := img.get_pixel(x, y)
+				var tone := c.darkened(0.06) if rng.randf() < 0.5 else c.lightened(0.05)
+				_fill(img, x, y, 2, 2, tone)
+
+	# claros calidos y sombras de copa, siempre de bajo contraste
+	for i in range(3 + int(w / 220.0)):
+		_ellipse(img, rng.randi_range(0, maxi(0, w - 1)), rng.randi_range(4, maxi(5, d - 4)),
+			rng.randi_range(8, 22), rng.randi_range(3, 8),
+			base.lerp(P.GOLD, rng.randf_range(0.05, 0.12)))
+	for i in range(2 + int(w / 260.0)):
+		_ellipse(img, rng.randi_range(0, maxi(0, w - 1)), rng.randi_range(4, maxi(5, d - 4)),
+			rng.randi_range(10, 26), rng.randi_range(4, 10),
+			base.lerp(P.INK_SOFT, rng.randf_range(0.06, 0.14)))
+
+	# calvas de tierra pisoteada, con terrones
+	for i in range(1 + int(w / 260.0)):
+		var cx := rng.randi_range(10, maxi(11, w - 11))
+		var cy := rng.randi_range(12, maxi(13, d - 14))
+		var rx := rng.randi_range(7, 18)
+		var ry := rng.randi_range(3, 8)
+		_ellipse(img, cx, cy + 1, rx + 2, ry + 1, P.DIRT_D.lerp(dark, 0.35))
+		_ellipse(img, cx, cy, rx, ry, P.DIRT_L.lerp(base, 0.48))
+		for j in range(3 + int(rx / 7.0)):
+			_px(img, cx + rng.randi_range(-rx, rx), cy + rng.randi_range(-ry, ry),
+				P.DIRT.lerp(P.DIRT_D, rng.randf()))
+
+	# piedritas: sombra abajo, cuerpo y luz arriba
+	for i in range(2 + int(w / 120.0)):
+		var cx := rng.randi_range(3, maxi(4, w - 4))
+		var cy := rng.randi_range(10, maxi(11, d - 5))
+		var r := rng.randi_range(1, 3)
+		_ellipse(img, cx, cy + 1, r + 1, maxi(1, r), P.STONE_D.lerp(dark, 0.30))
+		_ellipse(img, cx, cy, r, maxi(1, r - 1), P.STONE.lerp(base, 0.25))
+		_px(img, cx - 1, cy - 1, P.STONE_L)
+
+	# matitas y briznas sueltas
+	for i in range(4 + int(w / 90.0)):
+		var cx := rng.randi_range(2, maxi(3, w - 3))
+		var cy := rng.randi_range(8, maxi(9, d - 4))
+		for b in range(rng.randi_range(2, 5)):
+			var bx := cx + rng.randi_range(-2, 2)
+			var hh := rng.randi_range(2, 4)
+			for k in range(hh):
+				_px(img, bx + k / 3, cy - k, light if k < hh - 1 else bright)
+
+	# flores minusculas y hojarasca
+	for i in range(1 + int(w / 300.0)):
+		var cx := rng.randi_range(3, maxi(4, w - 4))
+		var cy := rng.randi_range(8, maxi(9, d - 4))
+		var petal: Color = [P.CREAM, P.GOLD, P.FLOWER_RUST][rng.randi_range(0, 2)]
+		_px(img, cx, cy - 1, petal)
+		_px(img, cx - 1, cy, petal)
+		_px(img, cx + 1, cy, petal)
+		_px(img, cx, cy + 1, petal)
+		_px(img, cx, cy, P.CREAM_D if petal == P.CREAM else P.INK_SOFT)
+	for i in range(1 + int(w / 220.0)):
+		_ellipse(img, rng.randi_range(2, maxi(3, w - 3)), rng.randi_range(10, maxi(11, d - 4)),
+			1, 1, P.LEATH_L.lerp(P.FLOWER_RUST, rng.randf()))
+
+	# borde trasero en sombra: las copas tapan el fondo de la plataforma
+	var back_h := mini(12, d)
+	for y in range(back_h):
+		var a := (1.0 - float(y) / float(back_h)) * 0.16
+		for x in range(w):
+			img.set_pixel(x, y, img.get_pixel(x, y).lerp(P.INK_SOFT, a))
+
+	# bordes laterales levemente oscurecidos, para separar tramos vecinos
+	for x in range(2):
+		var a := 0.10 * (1.0 - float(x) / 2.0)
+		for y in range(d):
+			img.set_pixel(x, y, img.get_pixel(x, y).lerp(P.INK_SOFT, a))
+			img.set_pixel(w - 1 - x, y, img.get_pixel(w - 1 - x, y).lerp(P.INK_SOFT, a))
+
+	# borde delantero: continuidad con el pasto de la cara frontal
+	for x in range(w):
+		var lip := d - 3 + int(round(sin(x * 0.07 + seed) * 1.2))
+		lip = clampi(lip, d - 5, d - 1)
+		for y in range(lip, d):
+			var c := P.GRASS
+			if y == d - 1:
+				c = P.GRASS_LL
+			elif y > lip:
+				c = P.GRASS_L
+			_px(img, x, y, c)
+		if rng.randf() < 0.35:
+			for k in range(rng.randi_range(1, 3)):
+				_px(img, x, lip - 1 - k, bright)
+
+	return ImageTexture.create_from_image(img)
+
+
+## Corte lateral de una plataforma. Reusa el dibujo frontal, pero rellena los
+## bordes transparentes (el recorte de acantilado) para que el Sprite3D cubra
+## por completo la cara plana del BoxMesh.
+func ground_side_texture(size: Vector2i, floating := false, seed := 0) -> ImageTexture:
+	var tex := ground_texture(size, floating, seed)
+	var img := tex.get_image()
+	img.fix_alpha_edges()
+	return ImageTexture.create_from_image(img)
+
+
 func _stone(img: Image, cx: int, cy: int, r: int, rng: RandomNumberGenerator) -> void:
 	var rx := r + 1 + rng.randi_range(0, 1)
 	var ry := maxi(2, r)
@@ -1085,6 +1216,29 @@ func saber_page() -> ImageTexture:
 		_px(img, 8 - i, 9 - i, P.GOLD)
 		_px(img, 8 + i, 9 + i, P.GOLD)
 		_px(img, 8 - i, 9 + i, P.GOLD)
+	return ImageTexture.create_from_image(img)
+
+
+## Iconos minimos de interfaz. Se dibujan en blanco para que la UI los tina
+## con el color del estado (verde/rojo) sin necesitar una textura por color.
+func ui_check() -> ImageTexture:
+	var img := _image(11, 11)
+	var c := Color.WHITE
+	var trazo := [[1, 5], [2, 6], [3, 7], [4, 8], [5, 7], [6, 6], [7, 5], [8, 4], [9, 3]]
+	for p in trazo:
+		_px(img, p[0], p[1], c)
+		_px(img, p[0], p[1] + 1, c)
+	return ImageTexture.create_from_image(img)
+
+
+func ui_cross() -> ImageTexture:
+	var img := _image(11, 11)
+	var c := Color.WHITE
+	for i in range(2, 9):
+		_px(img, i, i, c)
+		_px(img, i + 1, i, c)
+		_px(img, 10 - i, i, c)
+		_px(img, 9 - i, i, c)
 	return ImageTexture.create_from_image(img)
 
 

@@ -68,6 +68,31 @@ const FLOWER_RUST := Color("c86a48")
 # --- particulas -------------------------------------------------------
 const DUST := Color("f2e6c4d9")
 
+# --- interfaz ---------------------------------------------------------
+# Cuero, pergamino y tinta del diario. Los tonos de texto sobre pergamino
+# buscan contraste alto; los dorados quedan para bordes y ornamentos.
+const UI_SCRIM := Color("1a120eb8")
+const UI_SCRIM_TITLE := Color("1a120e66")
+const UI_LEATHER := Color("2e2018")
+const UI_LEATHER_L := Color("433024")
+const UI_LEATHER_H := Color("5a3f2d")
+const UI_GOLD := GOLD
+const UI_PARCHMENT := Color("f1e2bf")
+const UI_PARCHMENT_L := Color("f8eed6")
+const UI_PARCHMENT_D := Color("e2cda4")
+const UI_PARCHMENT_DD := Color("cbb183")
+const UI_INK := Color("2a1c15")
+const UI_INK_SOFT := Color("493324")
+const UI_INK_FAINT := Color("6a4f36")
+const UI_GOLD_INK := Color("8a571d")
+const UI_LINK := Color("356655")
+const UI_GOOD := Color("4d7438")
+const UI_GOOD_BG := Color("dbe5c0")
+const UI_BAD := Color("a5482d")
+const UI_BAD_BG := Color("f0d2c0")
+const UI_SHADOW := Color("120c098c")
+const UI_FLASH := Color("fff2d6")
+
 # --- leyenda de sprites ----------------------------------------------
 const LEGEND := {
 	".": Color(0, 0, 0, 0),
